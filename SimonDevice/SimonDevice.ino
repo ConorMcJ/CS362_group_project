@@ -1,13 +1,3 @@
-void setup() {
-  // put your setup code here, to run once:
-
-}
-
-void loop() {
-  // put your main code here, to run repeatedly:
-
-}
-
 enum SimonState {
   MENU,
   WAITING_START,
@@ -69,3 +59,13 @@ void sendLEDPattern() {
   mySerial.println("S_LED," + ledPattern);
 }
 
+
+void setup() {
+  // put your setup code here, to run once:
+
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+
+}
