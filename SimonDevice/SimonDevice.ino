@@ -3,34 +3,40 @@
 #include <LiquidCrystal.h>
 #include <SoftwareSerial.h>
 
-// LCD + Serial ---- as conner mentioned, this could be done in less pins using i2c.
-LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
-SoftwareSerial mySerial(10, 11);   // Simon - shared RX/TX bus to all 3 players like we discussed
+// PINS / HARDWARE
 
-// Joystick setup
-const int joyX = A1;   // LEFT/RIGHT
-const int joyY = A2;   // UP/DOWN
-const int joySW = 12;  // Joystick button --- added this cuz we might have space. will have to readjust code in case there is no space.
+// we can just adjust pins if needed to match wiring:
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
+
+// Shared serial bus to all three players
+SoftwareSerial mySerial(10, 11);
+
+// Joystick for menu control
+const int joyX  = A1;   // LEFT / RIGHT
+const int joyY  = A2;   // UP / DOWN
+const int joySW = 12;   // Joystick button (opens menu)
 
 const int LOW_T  = 300;
 const int HIGH_T = 700;
 
-unsigned long lastJoy = 0;
+unsigned long lastJoy   = 0;
 const unsigned long joyDelay = 200;
 
-// Simon LEDs for LED mini-game
+// Simon LEDs for LED mini-game (RGYB)
 const int ledPins[4] = {
   8,   // R
   9,   // G
   13,  // Y
-  A3   // B ---- i chose A3 but depending on pin availibility we can choose didital.
+  A3   // B (analog pin used as digital for now but if space, we shift to digital as needed)
 };
 
-// Simon buzzer
+// Buzzer pin
 const int buzzerPin = 4;
 
-// Game globals
-int level = 1;
+
+// GAME GLOBALS
+
+int level      = 1;
 bool gameActive = false;
 
 String memoryNumber = "";
@@ -39,17 +45,17 @@ String buzPattern   = "";
 
 unsigned long phaseStart = 0;
 
-// Per player alive flag. I'm only using 1-3. 0 is unsused, makes intuitive coding.
+// Player alive flags (1..3 used, index 0 unused) makes numbering easy
 bool alive[4] = { false, true, true, true };
 
-// Serial buffer for line based protocol like we discussed
+// Serial buffer for line based protocol
 String serialBuffer = "";
 
-// Token engine for collecting answers ---- Conner look over this, I tried implementing it.
-int currentPlayerId = 1;
-bool waitingForResponse = false;
-unsigned long tokenStart = 0;
-const unsigned long tokenTimeout = 3000;
+// Token engine
+int currentPlayerId       = 1;
+bool waitingForResponse   = false;
+unsigned long tokenStart  = 0;
+const unsigned long tokenTimeout = 3000;  // 3s to reply when requested
 
 // LED pattern timing
 bool ledPhaseInit       = false;
@@ -57,8 +63,7 @@ bool ledShowingPattern  = false;
 bool ledResponsePhase   = false;
 int  ledIndex           = 0;
 unsigned long lastLedStep = 0;
-const unsigned long ledStepInterval   = 600;
-const unsigned long ledResponseWindow = 12000;
+const unsigned long ledStepInterval = 600; // ms between LEDs
 
 // BUZZER pattern timing
 bool buzPhaseInit       = false;
@@ -67,19 +72,18 @@ bool buzResponsePhase   = false;
 int  buzIndex           = 0;
 unsigned long lastBuzStep = 0;
 
-// buzzer short/long durations ---- so i was thinking of making buzzer pitch and duration vary. we can make this into a 4-bit but I just did it for audio assist. game is still 2 bit.
-const unsigned long shortTone        = 200;
-const unsigned long longTone         = 500;
-const unsigned long buzResponseWindow = 12000;
+// Buzzer durations
+const unsigned long shortTone = 200;   // H: high + short
+const unsigned long longTone  = 500;   // L: low  + long
 
-// Player answers for current minigame. might end up needing this but idk, not really at this stage.
+// Player answers for possible later use, not really using it rn tho so
 String playerAnswers[4];
 
-// Minigame identifier.
+// Minigame identifier
 enum MiniGame { MG_NONE, MG_LED, MG_BUZ, MG_US, MG_MEM };
 MiniGame currentMiniGame = MG_NONE;
 
-// Main Simon states
+// Simon main states
 enum SimonState {
   MENU,
   WAITING_START,
@@ -95,78 +99,38 @@ enum SimonState {
 SimonState simonState = MENU;
 
 
-// SETUP
-void setup() {
-  lcd.begin(16, 2);
-  mySerial.begin(9600);
+// TIMER / HUD
 
-  pinMode(joySW, INPUT_PULLUP);
-  pinMode(buzzerPin, OUTPUT);
-
-  for (int i = 0; i < 4; i++) {
-    pinMode(ledPins[i], OUTPUT);
-    digitalWrite(ledPins[i], LOW);
-  }
-
-  randomSeed(analogRead(A0));
-
-  showMenu();
+// Response time per level: round(6 + 1.5 * level)
+int computeResponseTime(int lvl) {
+  float t = 6.0 + 1.5 * lvl;
+  return (int)(t + 0.5);  // round to nearest int
 }
 
+// Timer used during response windows
+int responseTimeSec          = 0;
+unsigned long responseWindow = 0;    // in ms
+unsigned long lastCountdownTick = 0;
 
-// LOOP
+// Drawing two-line HUD during response window as we discussed a few weeks ago
+// Top:  G:LED L:03
+// Bottom: T:08s
+void showHUD(const char* gameTag) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("G:");
+  lcd.print(gameTag);
+  lcd.print(" L:");
+  if (level < 10) lcd.print("0");
+  lcd.print(level);
+  lcd.print("   ");
 
-// didn't implement the rest so it easy to test. I will however, put those implementation in a separate file.
-void loop() {
-
-  handleMenuButtons();
-
-  switch (simonState) {
-
-    case MENU:
-      break;
-
-    case WAITING_START:
-      showStartScreen();
-      break;
-
-    case SEND_MEMORY_NUM:
-      runMemoryNumberPhase();
-      break;
-
-    case LED_GAME:
-      currentMiniGame = MG_LED;
-      runLEDGame();
-      break;
-
-    case BUZ_GAME:
-      currentMiniGame = MG_BUZ;
-      runBuzzerGame();
-      break;
-
-    case US_GAME:
-      // will use it later for ultrasonic game
-      simonState = RECALL_GAME;
-      break;
-
-    case RECALL_GAME:
-      // will use it later for memory recall game
-      simonState = PROCESS_RESULTS;
-      break;
-
-    case PROCESS_RESULTS:
-      handleResult();
-      break;
-
-    case GAME_OVER:
-      displayGameOver();
-      break;
-
-    case PAUSED:
-      break;
-  }
+  lcd.setCursor(0, 1);
+  lcd.print("T:");
+  if (responseTimeSec < 10) lcd.print("0");
+  lcd.print(responseTimeSec);
+  lcd.print("s   ");
 }
-
 
 // MENU SYSTEM
 
@@ -174,77 +138,46 @@ bool menuOpen = true;
 
 void showMenu() {
   lcd.clear();
-  lcd.setCursor(0,0);
+  lcd.setCursor(0, 0);
   lcd.print("Close  Start");
-  lcd.setCursor(0,1);
+  lcd.setCursor(0, 1);
   lcd.print("End    Pause");
   simonState = MENU;
   menuOpen = true;
 }
 
-void handleMenuButtons() {
-  unsigned long now = millis();
+void playStartMelody() {
+  // simple 4-note tune: C5, E5, G5, C6 for the intro like discussed
+  int notes[]     = { 523, 659, 784, 1047 };
+  int durations[] = { 150, 150, 150, 250 };
+  int pause       = 60;
 
-  if (digitalRead(joySW) == LOW && now - lastJoy > joyDelay) {
-    lastJoy = now;
-
-    if (!menuOpen) {
-      menuOpen = true;
-      showMenu();
-    }
-    return;
+  for (int i = 0; i < 4; i++) {
+    tone(buzzerPin, notes[i], durations[i]);
+    delay(durations[i] + pause);
   }
-
-  if (!menuOpen) return;   // this is so when the menu closed, we ignore directions
-
-  int x = analogRead(joyX);
-  int y = analogRead(joyY);
-
-  // UP = Close menu
-  if (y < LOW_T && now - lastJoy > joyDelay) {
-    menuOpen = false;
-    lcd.clear();
-    lastJoy = now;
-    return;
-  }
-
-  // DOWN = START
-  if (y > HIGH_T && now - lastJoy > joyDelay) {
-    startGame();
-    menuOpen = false;
-    lastJoy = now;
-    return;
-  }
-
-  // LEFT = END game
-  if (x < LOW_T && now - lastJoy > joyDelay) {
-    endGame();
-    lastJoy = now;
-    return;
-  }
-
-  // RIGHT = PAUSE / RESUME
-  if (x > HIGH_T && now - lastJoy > joyDelay) {
-    togglePause();
-    lastJoy = now;
-    return;
-  }
+  noTone(buzzerPin);
 }
 
+bool startShown    = false;
+bool memSent       = false;
+bool gameOverShown = false;
+
 void startGame() {
-  level = 1;
+  level      = 1;
   gameActive = true;
 
-  // resetting all players to alive at start of game
+  // Everyone back in
   alive[1] = true;
   alive[2] = true;
   alive[3] = true;
 
-  // resetting flags for a fresh run
+  // Resetting LED flags
   ledPhaseInit      = false;
   ledShowingPattern = false;
   ledResponsePhase  = false;
 
+  // Resetting BUZ flags
   buzPhaseInit      = false;
   buzShowingPattern = false;
   buzResponsePhase  = false;
@@ -253,10 +186,16 @@ void startGame() {
   currentPlayerId    = 1;
   serialBuffer       = "";
 
-  startShown   = false;
-  memSent      = false;
+  startShown    = false;
+  memSent       = false;
   gameOverShown = false;
   currentMiniGame = MG_NONE;
+
+  // Let players know current level
+  mySerial.println("S_LEVEL," + String(level));
+
+  // Optional short melody at start. we can tak this out later.
+  playStartMelody();
 
   lcd.clear();
   lcd.print("Starting...");
@@ -280,25 +219,75 @@ void togglePause() {
   } else {
     lcd.clear();
     lcd.print("Resuming...");
-    // resume into memory number phase of current level
-    memSent      = false;
-    ledPhaseInit = false;
-    buzPhaseInit = false;
-    simonState   = SEND_MEMORY_NUM;
+    // resume into memory number phase for current level
+    memSent        = false;
+    ledPhaseInit   = false;
+    buzPhaseInit   = false;
+    simonState     = SEND_MEMORY_NUM;
+  }
+}
+
+void handleMenuButtons() {
+  unsigned long now = millis();
+
+  // Joystick press opens menu if currently closed
+  if (digitalRead(joySW) == LOW && now - lastJoy > joyDelay) {
+    lastJoy = now;
+
+    if (!menuOpen) {
+      menuOpen = true;
+      showMenu();
+    }
+    return;
+  }
+
+  if (!menuOpen) return;
+
+  int x = analogRead(joyX);
+  int y = analogRead(joyY);
+
+  // UP = Close menu
+  if (y < LOW_T && now - lastJoy > joyDelay) {
+    menuOpen = false;
+    lcd.clear();
+    lastJoy = now;
+    return;
+  }
+
+  // DOWN = Start game
+  if (y > HIGH_T && now - lastJoy > joyDelay) {
+    startGame();
+    menuOpen = false;
+    lastJoy = now;
+    return;
+  }
+
+  // LEFT = End game
+  if (x < LOW_T && now - lastJoy > joyDelay) {
+    endGame();
+    lastJoy = now;
+    return;
+  }
+
+  // RIGHT = Pause / Resume
+  if (x > HIGH_T && now - lastJoy > joyDelay) {
+    togglePause();
+    lastJoy = now;
+    return;
   }
 }
 
 
 // START SCREEN
-bool startShown = false;
 
 void showStartScreen() {
   unsigned long now = millis();
 
   if (!startShown) {
     lcd.clear();
+    lcd.setCursor(0, 0);
     lcd.print("Get Ready!");
-    lcd.setCursor(0,1);
+    lcd.setCursor(0, 1);
     lcd.print("Level ");
     lcd.print(level);
 
@@ -314,12 +303,11 @@ void showStartScreen() {
 
 
 // MEMORY NUMBER GAME
-bool memSent = false;
 
 void generateMemoryNumber() {
   memoryNumber = "";
   for (int i = 0; i < 3; i++) {
-    memoryNumber += String(random(0,10));
+    memoryNumber += String(random(0, 10));
   }
 }
 
@@ -333,10 +321,10 @@ void runMemoryNumberPhase() {
     lcd.print("Mem: ");
     lcd.print(memoryNumber);
 
-    // broadcast to all players. so players show this on their LCDs using the broadcast.
+    // here I am basically telling players to show this on their LCD
     mySerial.println("S_MEM," + memoryNumber);
 
-    memSent   = true;
+    memSent    = true;
     phaseStart = now;
     return;
   }
@@ -349,8 +337,11 @@ void runMemoryNumberPhase() {
 
 
 // LED MINI-GAME
+
 void turnOffAllLEDs() {
-  for (int i = 0; i < 4; i++) digitalWrite(ledPins[i], LOW);
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(ledPins[i], LOW);
+  }
 }
 
 void setLED(char c) {
@@ -363,25 +354,24 @@ void setLED(char c) {
 
 void generateLEDPattern(int len) {
   ledPattern = "";
-  char colors[4] = {'R','G','Y','B'};
+  char colors[4] = { 'R', 'G', 'Y', 'B' };
   for (int i = 0; i < len; i++) {
-    ledPattern += colors[random(0,4)];
+    ledPattern += colors[random(0, 4)];
   }
 }
 
 void runLEDGame() {
   unsigned long now = millis();
 
-  // Initializing the LED game
+  // Initilaizing LED game
   if (!ledPhaseInit) {
     lcd.clear();
     lcd.print("LED Pattern...");
 
     generateLEDPattern(level + 2);
 
-    ledIndex     = 0;
-    lastLedStep  = now;
-
+    ledIndex          = 0;
+    lastLedStep       = now;
     ledPhaseInit      = true;
     ledShowingPattern = true;
     ledResponsePhase  = false;
@@ -390,10 +380,13 @@ void runLEDGame() {
     playerAnswers[2] = "";
     playerAnswers[3] = "";
 
+    // Notify players that LED game is starting
+    mySerial.println("S_LED_START");
+
     return;
   }
 
-  // showing pattern
+  // show pattern on Simon LEDs
   if (ledShowingPattern) {
     if (ledIndex < ledPattern.length()) {
       if (now - lastLedStep >= ledStepInterval) {
@@ -405,21 +398,36 @@ void runLEDGame() {
       turnOffAllLEDs();
       ledShowingPattern = false;
       ledResponsePhase  = true;
-      lcd.clear();
-      lcd.print("Your turn...");
-      phaseStart = now;
+
+      // Start response window here
+      currentMiniGame   = MG_LED;
+      responseTimeSec   = computeResponseTime(level);
+      responseWindow    = (unsigned long)responseTimeSec * 1000UL;
+      phaseStart        = now;
+      lastCountdownTick = now;
+
+      // HUD & broadcast timer to players
+      showHUD("LED");
+      mySerial.println("S_TIME," + String(responseTimeSec));
     }
     return;
   }
 
-  //  12 sec window for response validation etc
+  // players input & countdown runs
   if (ledResponsePhase) {
-    if (now - phaseStart >= ledResponseWindow) {
+    // countdown tick
+    if (responseTimeSec > 0 && now - lastCountdownTick >= 1000) {
+      lastCountdownTick += 1000;
+      responseTimeSec--;
+      showHUD("LED");
+    }
+
+    // window done?
+    if (now - phaseStart >= responseWindow || responseTimeSec <= 0) {
       ledResponsePhase   = false;
       currentPlayerId    = 1;
       waitingForResponse = false;
       serialBuffer       = "";
-      currentMiniGame    = MG_LED;
       simonState         = PROCESS_RESULTS;
     }
     return;
@@ -427,17 +435,17 @@ void runLEDGame() {
 }
 
 
+// BUZZER MINI-GAME
+// Pattern uses symbols:
+//   'H' = high tone + short duration
+//   'L' = low tone  + long duration
+// Example: "HLLH" – players hear this and input H/L with joystick.
 
-//  BUZZER MINI-GAME
-// Pattern is now only 2 symbols:
-// 'H' = high tone + short duration
-// 'L' = low tone + long duration
-// Example pattern: "HLLH"
 void generateBuzzerPattern(int len) {
   buzPattern = "";
-  char symbols[2] = {'H','L'};
+  char symbols[2] = { 'H', 'L' };
   for (int i = 0; i < len; i++) {
-    buzPattern += symbols[random(0,2)];
+    buzPattern += symbols[random(0, 2)];
   }
 }
 
@@ -452,7 +460,7 @@ void playBuzzerSymbol(char s) {
 void runBuzzerGame() {
   unsigned long now = millis();
 
-  // Initializing
+  // Initializing buzzer game
   if (!buzPhaseInit) {
     lcd.clear();
     lcd.print("Buzzer...");
@@ -460,8 +468,7 @@ void runBuzzerGame() {
     generateBuzzerPattern(level + 2);
 
     buzIndex        = 0;
-    lastBuzStep     = 0;  // so first step triggers immediately
-
+    lastBuzStep     = 0;
     buzPhaseInit      = true;
     buzShowingPattern = true;
     buzResponsePhase  = false;
@@ -470,10 +477,13 @@ void runBuzzerGame() {
     playerAnswers[2] = "";
     playerAnswers[3] = "";
 
+    // Notify players buzzer game is starting
+    mySerial.println("S_BUZ_START");
+
     return;
   }
 
-  // showing pattern
+  // play buzzer pattern
   if (buzShowingPattern) {
     if (buzIndex < buzPattern.length()) {
       if (now >= lastBuzStep) {
@@ -481,27 +491,38 @@ void runBuzzerGame() {
         playBuzzerSymbol(symbol);
 
         unsigned long dur = (symbol == 'H') ? shortTone : longTone;
-        lastBuzStep = now + dur + 100;  // small gap after each beep
+        lastBuzStep = now + dur + 100; // gap between beeps
       }
-    }
-    else {
+    } else {
       buzShowingPattern = false;
       buzResponsePhase  = true;
-      lcd.clear();
-      lcd.print("Your turn...");
-      phaseStart = now;
+
+      // Start response window
+      currentMiniGame   = MG_BUZ;
+      responseTimeSec   = computeResponseTime(level);
+      responseWindow    = (unsigned long)responseTimeSec * 1000UL;
+      phaseStart        = now;
+      lastCountdownTick = now;
+
+      showHUD("BUZ");
+      mySerial.println("S_TIME," + String(responseTimeSec));
     }
     return;
   }
 
-  // 12s response window again
+  // players input & countdown runs
   if (buzResponsePhase) {
-    if (now - phaseStart >= buzResponseWindow) {
+    if (responseTimeSec > 0 && now - lastCountdownTick >= 1000) {
+      lastCountdownTick += 1000;
+      responseTimeSec--;
+      showHUD("BUZ");
+    }
+
+    if (now - phaseStart >= responseWindow || responseTimeSec <= 0) {
       buzResponsePhase   = false;
       currentPlayerId    = 1;
       waitingForResponse = false;
       serialBuffer       = "";
-      currentMiniGame    = MG_BUZ;
       simonState         = PROCESS_RESULTS;
     }
     return;
@@ -509,23 +530,25 @@ void runBuzzerGame() {
 }
 
 
-
 // TOKEN-BASED RESULT HANDLING
+
+void parseResponse(MiniGame mg);
+
+void advanceOrEnd();
 
 void handleResult() {
   unsigned long now = millis();
   bool finishedAll = false;
 
-  //    LED MINI-GAME
+  // LED MINI-GAME
   if (currentMiniGame == MG_LED) {
-
     if (!waitingForResponse) {
       while (currentPlayerId <= 3 && !alive[currentPlayerId]) currentPlayerId++;
       if (currentPlayerId > 3) {
         finishedAll = true;
       } else {
         mySerial.println("S_REQ," + String(currentPlayerId) + ",LED");
-        tokenStart        = now;
+        tokenStart         = now;
         waitingForResponse = true;
         serialBuffer       = "";
       }
@@ -554,17 +577,15 @@ void handleResult() {
     return;
   }
 
-
-  //    BUZZER MINI-GAME
+  // BUZZER MINI-GAME
   if (currentMiniGame == MG_BUZ) {
-
     if (!waitingForResponse) {
       while (currentPlayerId <= 3 && !alive[currentPlayerId]) currentPlayerId++;
       if (currentPlayerId > 3) {
         finishedAll = true;
       } else {
         mySerial.println("S_REQ," + String(currentPlayerId) + ",BUZ");
-        tokenStart        = now;
+        tokenStart         = now;
         waitingForResponse = true;
         serialBuffer       = "";
       }
@@ -593,27 +614,27 @@ void handleResult() {
     return;
   }
 
-  // US + MEM not implemented yet so we default to game over. I will try to upload that soon as well but not today for testing.
+  // US + MEM not implemented yet – So for now we hust go to game over but later I will implement this as well I guess
   simonState = GAME_OVER;
 }
 
 
-
 // PARSE PLAYER RESPONSES
+
 void parseResponse(MiniGame mg) {
   int c1 = serialBuffer.indexOf(',');
   if (c1 < 0) { serialBuffer = ""; waitingForResponse = false; return; }
 
-  int c2 = serialBuffer.indexOf(',', c1+1);
+  int c2 = serialBuffer.indexOf(',', c1 + 1);
   if (c2 < 0) { serialBuffer = ""; waitingForResponse = false; return; }
 
-  int c3 = serialBuffer.indexOf(',', c2+1);
+  int c3 = serialBuffer.indexOf(',', c2 + 1);
   if (c3 < 0) { serialBuffer = ""; waitingForResponse = false; return; }
 
   String prefix = serialBuffer.substring(0, c1);
-  int    id     = serialBuffer.substring(c1+1, c2).toInt();
-  String type   = serialBuffer.substring(c2+1, c3);
-  String ans    = serialBuffer.substring(c3+1);
+  int    id     = serialBuffer.substring(c1 + 1, c2).toInt();
+  String type   = serialBuffer.substring(c2 + 1, c3);
+  String ans    = serialBuffer.substring(c3 + 1);
 
   if (prefix != "P_RESP" || id != currentPlayerId) {
     serialBuffer = "";
@@ -645,6 +666,7 @@ void parseResponse(MiniGame mg) {
 
 
 // ADVANCE LEVEL OR END GAME
+
 void advanceOrEnd() {
   bool anyoneAlive = false;
   for (int i = 1; i <= 3; i++) {
@@ -659,11 +681,11 @@ void advanceOrEnd() {
     return;
   }
 
-  // If we just finished LED game and players still alive → go to BUZ game
+  // Finished LED mini-game, go to BUZ mini-game
   if (currentMiniGame == MG_LED) {
-    buzPhaseInit      = false;
-    buzShowingPattern = false;
-    buzResponsePhase  = false;
+    buzPhaseInit       = false;
+    buzShowingPattern  = false;
+    buzResponsePhase   = false;
     waitingForResponse = false;
     currentPlayerId    = 1;
     serialBuffer       = "";
@@ -671,13 +693,16 @@ void advanceOrEnd() {
     return;
   }
 
-  // If we just finished BUZ game and players still alive → next level
+  // Finished BUZ mini-game, go to next level
   if (currentMiniGame == MG_BUZ) {
     level++;
 
-    // reset for next level cycle
-    startShown   = false;
-    memSent      = false;
+    // Let players know new level
+    mySerial.println("S_LEVEL," + String(level));
+
+    // Reset for next cycle
+    startShown    = false;
+    memSent       = false;
 
     ledPhaseInit      = false;
     ledShowingPattern = false;
@@ -691,13 +716,12 @@ void advanceOrEnd() {
     currentPlayerId    = 1;
     serialBuffer       = "";
 
-    simonState = SEND_MEMORY_NUM; // BUt this can be US after implemenation and etcetc
+    simonState = SEND_MEMORY_NUM;  // or later: go to US game first
   }
 }
 
 
 // GAME OVER
-bool gameOverShown = false;
 
 void displayGameOver() {
   unsigned long now = millis();
@@ -706,11 +730,78 @@ void displayGameOver() {
     lcd.clear();
     lcd.print("GAME OVER");
     gameOverShown = true;
-    phaseStart = now;
+    phaseStart    = now;
   }
 
   if (now - phaseStart >= 2000) {
     gameOverShown = false;
     showMenu();
+  }
+}
+
+
+// SETUP / LOOP
+
+void setup() {
+  lcd.begin(16, 2);
+  mySerial.begin(9600);
+
+  pinMode(joySW, INPUT_PULLUP);
+  pinMode(buzzerPin, OUTPUT);
+
+  for (int i = 0; i < 4; i++) {
+    pinMode(ledPins[i], OUTPUT);
+    digitalWrite(ledPins[i], LOW);
+  }
+
+  randomSeed(analogRead(A0));
+
+  showMenu();
+}
+
+void loop() {
+  handleMenuButtons();
+
+  switch (simonState) {
+    case MENU:
+      break;
+
+    case WAITING_START:
+      showStartScreen();
+      break;
+
+    case SEND_MEMORY_NUM:
+      runMemoryNumberPhase();
+      break;
+
+    case LED_GAME:
+      runLEDGame();
+      break;
+
+    case BUZ_GAME:
+      runBuzzerGame();
+      break;
+
+    case US_GAME:
+      // Placeholder for ultrasonic mini-game
+      simonState = RECALL_GAME;
+      break;
+
+    case RECALL_GAME:
+      // Placeholder for memory recall IR mini-game
+      simonState = PROCESS_RESULTS;
+      break;
+
+    case PROCESS_RESULTS:
+      handleResult();
+      break;
+
+    case GAME_OVER:
+      displayGameOver();
+      break;
+
+    case PAUSED:
+      // nothing, waits for togglePause()
+      break;
   }
 }
