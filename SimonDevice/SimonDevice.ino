@@ -23,7 +23,7 @@ const int ledPins[4] = {
   8,   // R
   9,   // G
   13,  // Y
-  A3   // B ---- U chose A3 but depending on pin availibility we can choose didital.
+  A3   // B ---- i chose A3 but depending on pin availibility we can choose didital.
 };
 
 // Simon buzzer
