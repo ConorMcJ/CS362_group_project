@@ -27,13 +27,11 @@ A. REMAINING TODOs (SIMON)
 
 PIN ASSIGNMENTS (SIMON)
 -----------------------
-LCD (parallel):
-  RS = 7
-  E  = 6
-  D4 = 5
-  D5 = 4
-  D6 = 3
-  D7 = 2
+LCD (forLiquidCrystal_I2C lcd(0x27, 16, 2);):
+LCD SDA → A4  
+LCD SCL → A5  
+LCD VCC → 5V  
+LCD GND → GND
 
 SoftwareSerial:
   RX = 10
