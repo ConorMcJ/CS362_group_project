@@ -384,7 +384,3 @@ Otherwise:
 ### Player Side
 
 * Add any missing IR hex bindings once identified.
-
-### Simon Side
-
-* Allow optional round summaries or spectator display modes.
