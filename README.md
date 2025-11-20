@@ -61,7 +61,7 @@ Simon is always the only transmitter except when explicitly requesting a single 
 
 # Minigame Flow (Every Round)
 
-Each level consists of **five games**, always in this order:
+Each level consists of **four games**, always in this order:
 
 | Order | Game                | Code | Description                                    |
 | ----- | ------------------- | ---- | ---------------------------------------------- |
@@ -93,7 +93,7 @@ Level 6 → 5 digits
 
 ### Timers Used by Mini-games
 
-**LED, BUZ, MEM (recall)**
+**LED, BUZ**
 
 ```
 responseTime = round(6 + 1.5 × level)
