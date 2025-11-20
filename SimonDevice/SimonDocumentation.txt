@@ -1,0 +1,177 @@
+SIMON DEVICE — FULL TECHNICAL DOCUMENTATION
+-------------------------------------------
+
+A. REMAINING TODOs (SIMON)
+--------------------------
+1. IR remote bindings (TODO):
+   - Must record actual HEX codes for digits 0–9, OK, CLEAR.
+   - Replace placeholder values in the IR lookup table.
+   - Confirm player answers match Simon comparison logic.
+
+2. Final wiring verification:
+   - Check LED color → pin mapping.
+   - Verify joystick orientation matches menu control.
+   - Ensure software-serial bus wiring is stable.
+
+3. Optional:
+   - Add debug mode for serial monitor.
+   - Add delay between S_REQ messages to reduce collisions.
+
+4. Ultrasonic tolerance:
+   - Can be increased, decreased, or made level-based.
+   - Currently fixed at ±5 cm.
+
+5. IR learning mode:
+   - Not required. Using hardcoded HEX values.
+
+
+PIN ASSIGNMENTS (SIMON)
+-----------------------
+LCD (parallel):
+  RS = 7
+  E  = 6
+  D4 = 5
+  D5 = 4
+  D6 = 3
+  D7 = 2
+
+SoftwareSerial:
+  RX = 10
+  TX = 11
+
+Joystick:
+  X-axis = A1
+  Y-axis = A2
+  Button = 12 (active LOW)
+
+LEDs:
+  R = 8
+  G = 9
+  Y = 13
+  B = A3
+
+Buzzer:
+  Pin = 4
+
+
+LCD BEHAVIOR
+------------
+MENU screen:
+  Close  Start
+  End    Pause
+
+Start screen:
+  Get Ready!
+  Level X
+
+Memory number:
+  Mem: NNN...
+  (Digits increase every 3 rounds)
+
+LED game:
+  LED Pattern...
+
+Buzzer game:
+  Buzzer...
+
+Ultrasonic game:
+  US Distance...
+
+Memory Recall:
+  Recall Mem...
+
+HUD (during response window):
+  Line 1: G:<TAG> L:<level>
+  Line 2: T:<seconds>s
+
+Game Over:
+  GAME OVER
+
+
+TIMERS
+------
+LED input:      round(6 + 1.5 × level)
+Buzzer input:   round(6 + 1.5 × level)
+Ultrasonic:     FIXED 8 seconds
+Memory recall:  round(6 + 1.5 × level)
+
+LED pattern interval: 600 ms per LED
+Buzzer tones: High=200 ms, Low=500 ms
+Memory number display: 2 seconds
+Menu debounce: 200 ms
+
+
+TOKEN-BASED COMMUNICATION
+--------------------------
+Simon → Player request:
+  S_REQ,<id>,LED
+  S_REQ,<id>,BUZ
+  S_REQ,<id>,US
+  S_REQ,<id>,MEM
+
+Player → Simon answer:
+  P_RESP,<id>,<GAME>,<answer>
+
+Simon → Player result:
+  S_RES,<id>,<GAME>,OK
+  S_RES,<id>,<GAME>,FAIL
+
+Flow:
+1. Simon sends S_REQ
+2. Starts 3-second timeout
+3. Player responds OR timeout → FAIL
+4. Move to next alive player
+5. When all answered → next game
+
+
+LEVEL DIFFICULTY
+----------------
+Memory number digits:
+  digits = 3 + floor((level - 1) / 3)
+
+LED pattern length:
+  level + 2
+
+Buzzer pattern length:
+  level + 2
+
+Ultrasonic:
+  Target randomized 15–40 cm
+  Tolerance ±5 cm
+
+Memory recall:
+  Exact match required (no tolerance)
+
+
+I/O DEVICES (SIMON)
+-------------------
+Memory number: LCD
+LED game:      4 onboard LEDs
+Buzzer game:   piezo buzzer
+Ultrasonic:    handled by players, not Simon
+IR recall:     players only
+Menu:          joystick + LCD
+Comm:          SoftwareSerial
+
+
+GAME FLOW
+---------
+MENU
+↓
+START
+↓
+Memory Number  (A1)
+↓
+LED Pattern    (B)
+↓
+Buzzer Game    (C)
+↓
+Ultrasonic     (D)
+↓
+Memory Recall  (A2)
+↓
+Next Level
+↓
+If all players fail → GAME OVER
+↓
+Return to MENU
