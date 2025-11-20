@@ -1,0 +1,155 @@
+PLAYER DEVICE — FULL TECHNICAL DOCUMENTATION
+--------------------------------------------
+
+A. REMAINING TODOs (PLAYER)
+---------------------------
+1. Capture IR hex codes for:
+   - digits 0–9
+   - OK / ENTER
+   - CLEAR
+   - (Optional) Power button
+
+2. Ultrasonic calibration:
+   - Test HC-SR04 range accuracy.
+   - Ensure stable readings before sending answer.
+
+3. Final wiring verification.
+
+4. Large-level memory recall:
+   - Memory answer may reach 6 digits at high levels.
+
+
+PIN ASSIGNMENTS (PLAYER)
+------------------------
+LCD (I2C):
+  SDA → A4
+  SCL → A5
+  Address: 0x27
+
+SoftwareSerial:
+  RX = 10
+  TX = 11
+
+LED game buttons:
+  btnPins = {2, 3, 4, 5}
+  (Left→Right = R,G,Y,B)
+
+Joystick for BUZZER game:
+  Y-axis → A0
+    y <300  → 'H'
+    y >700  → 'L'
+
+Ultrasonic:
+  trig = 6
+  echo = 7
+
+IR receiver:
+  irPin = 8
+
+
+LCD BEHAVIOR
+------------
+On power-up:
+  Player X
+  Waiting Simon...
+
+Memory Number:
+  Mem: NNN
+  G:A PX L:YY
+
+LED game:
+  LED Ready...
+  G:B PX L:YY
+
+  During countdown:
+  LED T:12s
+  G:B PX L:YY
+
+Buzzer game:
+  BUZ Ready...
+  BUZ T:12s
+
+Ultrasonic:
+  Aim XXcm T:08s
+  G:D PX L:YY
+
+Memory Recall:
+  input: 12_
+  G:A PX L:YY
+
+Result:
+  OK!
+  or
+  ELIMINATED!
+
+
+TIMERS
+------
+LED input:      from Simon via S_TIME
+Buzzer input:   from Simon via S_TIME
+Ultrasonic:     fixed 8 seconds
+Recall:         from Simon via S_TIME
+
+Timers automatically lock in the player's answer.
+
+
+COMMUNICATION PROTOCOL (PLAYER)
+-------------------------------
+Player listens for Simon messages:
+
+S_LEVEL,x
+S_MEM,NNN
+S_LED_START
+S_BUZ_START
+S_US_START,x
+S_RECALL_START
+S_TIME,x
+
+Request:
+  S_REQ,1,LED
+  S_REQ,1,BUZ
+  S_REQ,1,US
+  S_REQ,1,MEM
+
+Player responds:
+  P_RESP,1,LED,RGBY
+  P_RESP,1,BUZ,HLLH
+  P_RESP,1,US,27
+  P_RESP,1,MEM,4821
+
+Result:
+  S_RES,1,LED,OK
+  S_RES,1,LED,FAIL
+
+
+DIFFICULTY SCALING
+------------------
+Player only displays level and does not compute difficulty.
+Simon determines:
+  - pattern length
+  - digits in memory number
+  - time limit
+
+
+I/O DEVICES (PLAYER)
+--------------------
+Memory show: LCD
+LED game:    4 button inputs
+Buzzer:      joystick (vertical only)
+Ultrasonic:  HC-SR04 sensor
+Memory recall: IR remote
+HUD:         LCD (top: game info, bottom: “G:X PX L:YY”)
+Communication: SoftwareSerial
+
+
+GAME FLOW
+---------
+1. Idle, waiting for Simon
+2. Show memory number
+3. LED input
+4. Buzzer input
+5. Ultrasonic input
+6. Memory recall input
+7. Wait for elimination/OK
+8. If alive → back to idle for next level
+9. If eliminated → stay eliminated
