@@ -1,3 +1,10 @@
+/*
+  Communication Protocol
+  Player -> Simon
+
+  '@' [PLAYER_ID] [DATA...] '!'
+*/
+
 void setup() {
   // put your setup code here, to run once:
 

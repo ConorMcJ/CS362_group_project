@@ -6,7 +6,7 @@
 // Conor McJannett     | (cmcja2)  | cmcja2@uic.edu
 // Tanmay Patel        | (tpate)   | tpate@uic.edu
 // Rahul Gadhavi       | (rgadha2) | rgadha2@uic.edu
-// 
+//
 //
 // Simon Device
 /*
@@ -131,7 +131,7 @@ struct Session {
   unsigned short numPlayers;
 };
 
-Session currentSession = {MENU, MENU, 1, 3};
+Session currentSession = { MENU, MENU, 1, 3 };
 
 // State tracking variables
 unsigned long stateStartTime = 0;
@@ -199,7 +199,7 @@ void setup() {
   // Define TX and RX pin modes for SoftwareSerial
   pinMode(TX, OUTPUT);
   pinMode(RX, INPUT);
-  
+
   // Button and LED pins
   pinMode(PUSH_BUTTON, INPUT_PULLUP);
   pinMode(LED_1, OUTPUT);
@@ -207,7 +207,7 @@ void setup() {
   pinMode(LED_3, OUTPUT);
   pinMode(LED_4, OUTPUT);
   pinMode(BUZZER, OUTPUT);
-  
+
   // Turn off all LEDs initially
   digitalWrite(LED_1, LOW);
   digitalWrite(LED_2, LOW);
@@ -220,10 +220,10 @@ void setup() {
   // LCD init
   lcd.init();
   lcd.backlight();
-  
+
   // Seed random number generator
   randomSeed(analogRead(A0));
-  
+
   // Initialize session
   currentSession.currentState = MENU;
   currentSession.prevState = MENU;
@@ -237,43 +237,43 @@ void loop() {
     case MENU:
       handleMenuState();
       break;
-      
+
     case WAITING_START:
       handleWaitingStartState();
       break;
-      
+
     case SEND_MEMORY_NUM:
       handleSendMemoryNumState();
       break;
-      
+
     case LED_GAME:
       handleLEDGameState();
       break;
-      
+
     case BUZ_GAME:
       handleBuzGameState();
       break;
-      
+
     case US_GAME:
       handleUSGameState();
       break;
-      
+
     case RECALL_GAME:
       handleRecallGameState();
       break;
-      
+
     case PROCESS_RESULTS:
       handleProcessResultsState();
       break;
-      
+
     case GAME_OVER:
       handleGameOverState();
       break;
-      
+
     case PAUSED:
       handlePausedState();
       break;
-      
+
     default:
       // Error state - return to menu
       currentSession.currentState = MENU;
@@ -285,21 +285,21 @@ void loop() {
 
 void handleMenuState() {
   static bool menuInitialized = false;
-  static byte selectedOption = 0; // 0=Start Game, 1=Settings
-  static byte lastSelectedOption = 255; // Track last displayed option
+  static byte selectedOption = 0;        // 0=Start Game, 1=Settings
+  static byte lastSelectedOption = 255;  // Track last displayed option
   static unsigned long lastJoystickRead = 0;
-  const unsigned long JOYSTICK_DEBOUNCE = 50; // 200ms debounce for joystick
-  
+  const unsigned long JOYSTICK_DEBOUNCE = 50;  // 200ms debounce for joystick
+
   if (!menuInitialized) {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Simon Says Game");
     lcd.setCursor(0, 1);
     lcd.print(">Start  Settings");
-    
+
     // Initialize all players to WAITING
     sendCommand('W');
-    
+
     // Reset session
     currentSession.level = 1;
     currentSession.numPlayers = 3;
@@ -308,16 +308,16 @@ void handleMenuState() {
       players[i].score = 0;
       players[i].inputLength = 0;
     }
-    
+
     menuInitialized = true;
     lastSelectedOption = 0;
     stateStartTime = millis();
   }
-  
+
   // Read joystick for menu navigation with debouncing
   if (millis() - lastJoystickRead > JOYSTICK_DEBOUNCE) {
     int xVal = analogRead(JOYSTICK_X);
-    
+
     // Left/Right to change selection
     if (xVal < 300 && selectedOption != 0) {
       selectedOption = 0;
@@ -327,7 +327,7 @@ void handleMenuState() {
       lastJoystickRead = millis();
     }
   }
-  
+
   // Only update LCD if selection changed
   if (selectedOption != lastSelectedOption) {
     lcd.setCursor(0, 1);
@@ -338,7 +338,7 @@ void handleMenuState() {
     }
     lastSelectedOption = selectedOption;
   }
-  
+
   // Check button press with debouncing
   if (readButtonDebounced()) {
     if (selectedOption == 0) {
@@ -355,8 +355,8 @@ void handleMenuState() {
       lcd.print("Settings");
       lcd.setCursor(0, 1);
       lcd.print("to be implemented");
-      delay(1500); // Show message briefly
-      menuInitialized = false; // Force menu redraw
+      delay(1500);              // Show message briefly
+      menuInitialized = false;  // Force menu redraw
       lastSelectedOption = 255;
     }
   }
@@ -365,7 +365,7 @@ void handleMenuState() {
 void handleWaitingStartState() {
   static bool initialized = false;
   const unsigned long COUNTDOWN_DURATION = 3000;
-  
+
   if (!initialized) {
     lcd.clear();
     lcd.setCursor(0, 0);
@@ -376,16 +376,16 @@ void handleWaitingStartState() {
     initialized = true;
     stateStartTime = millis();
   }
-  
+
   unsigned long elapsed = millis() - stateStartTime;
-  
+
   // Update countdown
   byte secondsLeft = 3 - (elapsed / 1000);
   if (secondsLeft <= 3) {
     lcd.setCursor(12, 1);
     lcd.print(secondsLeft);
   }
-  
+
   // Check for pause
   if (readButtonDebounced()) {
     currentSession.prevState = WAITING_START;
@@ -393,7 +393,7 @@ void handleWaitingStartState() {
     initialized = false;
     return;
   }
-  
+
   // Transition
   if (elapsed >= COUNTDOWN_DURATION) {
     currentSession.prevState = WAITING_START;
@@ -406,24 +406,24 @@ void handleWaitingStartState() {
 void handleSendMemoryNumState() {
   static bool initialized = false;
   const unsigned long DISPLAY_DURATION = 5000;
-  
+
   if (!initialized) {
     // Generate random 3-digit number
     memoryNumber = random(100, 1000);
-    
+
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Remember:");
     lcd.setCursor(0, 1);
     lcd.print("   ");
     lcd.print(memoryNumber);
-    
+
     initialized = true;
     stateStartTime = millis();
   }
-  
+
   unsigned long elapsed = millis() - stateStartTime;
-  
+
   // Transition after display time
   if (elapsed >= DISPLAY_DURATION) {
     currentSession.prevState = SEND_MEMORY_NUM;
@@ -441,33 +441,33 @@ void handleLEDGameState() {
   static unsigned long lastLEDChange = 0;
   const unsigned long LED_ON_TIME = 500;
   const unsigned long LED_OFF_TIME = 300;
-  
+
   if (!initialized) {
     // Generate random pattern (level + 2 length)
     patternLength = currentSession.level + 2;
     for (byte i = 0; i < patternLength; i++) {
-      currentPattern[i] = random(1, 5); // LEDs 1-4
+      currentPattern[i] = random(1, 5);  // LEDs 1-4
     }
-    
+
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("LED Pattern Game");
     lcd.setCursor(0, 1);
     lcd.print("Watch & Remember");
-    
+
     // Turn off all LEDs
     turnOffAllLEDs();
-    
+
     initialized = true;
     currentLED = 0;
     stateStartTime = millis();
     lastLEDChange = millis();
   }
-  
+
   // Show pattern
   if (!patternShown) {
     unsigned long elapsed = millis() - lastLEDChange;
-    
+
     if (currentLED < patternLength) {
       // Blink current LED
       if (elapsed < LED_ON_TIME) {
@@ -484,23 +484,23 @@ void handleLEDGameState() {
     } else {
       // Pattern complete
       patternShown = true;
-      
+
       // Signal players to start recording
-      sendCommand('S', 'L'); // Start LED game
-      lcd.setCursor(0,0);
+      sendCommand('S', 'L');  // Start LED game
+      lcd.setCursor(0, 0);
       lcd.print("      Go!       ")
-      
-      stateStartTime = millis();
-      lcd.setCursor(0,1);
+
+        stateStartTime = millis();
+      lcd.setCursor(0, 1);
     }
   } else {
     // Wait for players to input (time proportional to level)
     unsigned long inputTime = 5000 + (currentSession.level * 1000);
     unsigned long elapsed = millis() - stateStartTime;
-      
-      lcd.print("")
-    
-    if (elapsed >= inputTime) {
+
+    lcd.print("")
+
+      if (elapsed >= inputTime) {
       // Time's up, process results
       currentSession.prevState = LED_GAME;
       currentSession.currentState = PROCESS_RESULTS;
@@ -520,29 +520,29 @@ void handleBuzGameState() {
   const unsigned long TONE_GAP = 200;
   const int HIGH_FREQ = 1000;
   const int LOW_FREQ = 400;
-  
+
   if (!initialized) {
     // Generate random high/low pattern
     patternLength = currentSession.level + 2;
     for (byte i = 0; i < patternLength; i++) {
-      currentPattern[i] = random(0, 2); // 0=LOW, 1=HIGH
+      currentPattern[i] = random(0, 2);  // 0=LOW, 1=HIGH
     }
-    
+
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Sound Game");
     lcd.setCursor(0, 1);
     lcd.print("Listen Carefully");
-    
+
     initialized = true;
     currentTone = 0;
     lastToneChange = millis();
   }
-  
+
   // Show pattern
   if (!patternShown) {
     unsigned long elapsed = millis() - lastToneChange;
-    
+
     if (currentTone < patternLength) {
       if (elapsed < TONE_DURATION) {
         // Play tone
@@ -560,14 +560,14 @@ void handleBuzGameState() {
       // Pattern complete
       noTone(BUZZER);
       patternShown = true;
-      sendCommand('S', 'B'); // Start buzzer game
+      sendCommand('S', 'B');  // Start buzzer game
       stateStartTime = millis();
     }
   } else {
     // Wait for player input
     unsigned long inputTime = 5000 + (currentSession.level * 1000);
     unsigned long elapsed = millis() - stateStartTime;
-    
+
     if (elapsed >= inputTime) {
       currentSession.prevState = BUZ_GAME;
       currentSession.currentState = PROCESS_RESULTS;
@@ -582,11 +582,11 @@ void handleUSGameState() {
   static bool countdownStarted = false;
   static unsigned long countdownStart = 0;
   const unsigned long COUNTDOWN_DURATION = 5000;
-  
+
   if (!initialized) {
     // Generate random target distance (10-100 cm)
     targetDistance = random(10, 101);
-    
+
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Target: ");
@@ -594,12 +594,12 @@ void handleUSGameState() {
     lcd.print(" cm");
     lcd.setCursor(0, 1);
     lcd.print("Get ready...");
-    
+
     initialized = true;
     countdownStarted = false;
     stateStartTime = millis();
   }
-  
+
   // Start countdown after 2 seconds
   if (!countdownStarted && (millis() - stateStartTime >= 2000)) {
     countdownStarted = true;
@@ -607,25 +607,25 @@ void handleUSGameState() {
     lcd.setCursor(0, 1);
     lcd.print("Starting in 5...");
   }
-  
+
   if (countdownStarted) {
     unsigned long elapsed = millis() - countdownStart;
     byte secondsLeft = 5 - (elapsed / 1000);
-    
+
     // Update countdown display
     if (elapsed % 1000 < 50) {
       lcd.setCursor(12, 1);
       lcd.print(secondsLeft);
     }
-    
+
     // Time's up
     if (elapsed >= COUNTDOWN_DURATION) {
       // Signal players to capture distance
       sendCommand('S', 'U');
-      
+
       // Small delay for players to capture
       delay(100);
-      
+
       currentSession.prevState = US_GAME;
       currentSession.currentState = PROCESS_RESULTS;
       initialized = false;
@@ -637,23 +637,23 @@ void handleUSGameState() {
 void handleRecallGameState() {
   static bool initialized = false;
   const unsigned long INPUT_TIME = 10000;
-  
+
   if (!initialized) {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Recall Number:");
     lcd.setCursor(0, 1);
     lcd.print("Use IR Remote");
-    
+
     // Signal players to start recording IR input
     sendCommand('S', 'R');
-    
+
     initialized = true;
     stateStartTime = millis();
   }
-  
+
   unsigned long elapsed = millis() - stateStartTime;
-  
+
   // Show time remaining
   byte secondsLeft = (INPUT_TIME - elapsed) / 1000;
   if (elapsed % 500 < 50) {
@@ -661,7 +661,7 @@ void handleRecallGameState() {
     lcd.print(secondsLeft < 10 ? " " : "");
     lcd.print(secondsLeft);
   }
-  
+
   // Time's up
   if (elapsed >= INPUT_TIME) {
     currentSession.prevState = RECALL_GAME;
@@ -677,24 +677,24 @@ void handleProcessResultsState() {
   static bool requestSent = false;
   static unsigned long requestTime = 0;
   const unsigned long RESPONSE_TIMEOUT = 2000;
-  
+
   if (!initialized) {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Processing...");
-    
+
     currentPlayer = 0;
     requestSent = false;
     initialized = true;
   }
-  
+
   // Process each active player
   if (currentPlayer < 3) {
     if (!players[currentPlayer].isActive) {
       currentPlayer++;
       return;
     }
-    
+
     if (!requestSent) {
       // Request data from current player
       requestPlayerData(currentPlayer + 1);
@@ -706,7 +706,7 @@ void handleProcessResultsState() {
       if (receivePlayerData(currentPlayer + 1, buffer, 50, RESPONSE_TIMEOUT - (millis() - requestTime))) {
         // Parse and store player data
         parsePlayerData(currentPlayer, buffer);
-        
+
         // Move to next player
         currentPlayer++;
         requestSent = false;
@@ -720,10 +720,10 @@ void handleProcessResultsState() {
   } else {
     // All players processed, evaluate results
     evaluateResults();
-    
+
     // Determine next state
     byte activePlayers = countActivePlayers();
-    
+
     // Check for game over conditions
     if (activePlayers == 0 || currentSession.level >= MAX_LEVEL) {
       // Game over: all eliminated OR max level reached
@@ -736,16 +736,16 @@ void handleProcessResultsState() {
     } else {
       // Multiple players still active - continue
       SimonState nextGame = getNextGameState();
-      
+
       if (nextGame == SEND_MEMORY_NUM) {
         // Completed a round, increase level
         currentSession.level++;
       }
-      
+
       currentSession.prevState = PROCESS_RESULTS;
       currentSession.currentState = nextGame;
     }
-    
+
     initialized = false;
     stateStartTime = millis();
   }
@@ -758,26 +758,26 @@ void handleGameOverState() {
   static byte numWinners = 0;
   static byte winners[3];
   const unsigned long MODE_DURATION = 3000;
-  
+
   if (!initialized) {
     lcd.clear();
-    
+
     // Send END_GAME command
     sendCommand('E');
-    
+
     // Find all winners (handle draws)
     numWinners = findAllWinners(winners);
-    
+
     initialized = true;
     displayMode = 0;
     lastModeChange = millis();
   }
-  
+
   unsigned long elapsed = millis() - lastModeChange;
-  
+
   // Cycle through different displays
-  switch(displayMode) {
-    case 0: // Show winner(s)
+  switch (displayMode) {
+    case 0:  // Show winner(s)
       if (elapsed == 0 || elapsed < 100) {
         lcd.clear();
         if (numWinners == 0) {
@@ -811,8 +811,8 @@ void handleGameOverState() {
         }
       }
       break;
-      
-    case 1: // Show final level and reason
+
+    case 1:  // Show final level and reason
       if (elapsed == 0 || elapsed < 100) {
         lcd.clear();
         if (currentSession.level >= MAX_LEVEL) {
@@ -828,8 +828,8 @@ void handleGameOverState() {
         }
       }
       break;
-      
-    case 2: // Show instructions
+
+    case 2:  // Show instructions
       if (elapsed == 0 || elapsed < 100) {
         lcd.clear();
         lcd.setCursor(0, 0);
@@ -839,13 +839,13 @@ void handleGameOverState() {
       }
       break;
   }
-  
+
   // Cycle displays
   if (elapsed >= MODE_DURATION) {
     displayMode = (displayMode + 1) % 3;
     lastModeChange = millis();
   }
-  
+
   // Check for button press to return to menu
   if (readButtonDebounced()) {
     currentSession.prevState = GAME_OVER;
@@ -858,20 +858,20 @@ void handleGameOverState() {
 void handlePausedState() {
   static bool initialized = false;
   static byte selectedOption = 0;
-  
+
   if (!initialized) {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("PAUSED");
     lcd.setCursor(0, 1);
     lcd.print(">Resume  Quit");
-    
+
     initialized = true;
   }
-  
+
   // Read joystick
   int xVal = analogRead(JOYSTICK_X);
-  
+
   if (xVal < 300 && selectedOption != 0) {
     selectedOption = 0;
     lcd.setCursor(0, 1);
@@ -881,7 +881,7 @@ void handlePausedState() {
     lcd.setCursor(0, 1);
     lcd.print(" Resume >Quit  ");
   }
-  
+
   // Check button
   if (readButtonDebounced()) {
     if (selectedOption == 0) {
@@ -936,11 +936,11 @@ bool receivePlayerData(byte playerID, byte* buffer, byte maxLen, unsigned long t
   unsigned long startTime = millis();
   byte index = 0;
   bool started = false;
-  
+
   while (millis() - startTime < timeout) {
     if (mySerial.available() > 0) {
       char c = mySerial.read();
-      
+
       if (c == '@') {
         started = true;
         index = 0;
@@ -948,13 +948,13 @@ bool receivePlayerData(byte playerID, byte* buffer, byte maxLen, unsigned long t
         // Chunk separator - continue reading
         continue;
       } else if (started && c == '!') {
-        return true; // Complete message received
+        return true;  // Complete message received
       } else if (started && index < maxLen) {
         buffer[index++] = c;
       }
     }
   }
-  return false; // Timeout
+  return false;  // Timeout
 }
 
 // ============= HELPER FUNCTIONS =============
@@ -962,18 +962,18 @@ bool receivePlayerData(byte playerID, byte* buffer, byte maxLen, unsigned long t
 bool readButtonDebounced() {
   // Read the current state
   byte reading = digitalRead(PUSH_BUTTON);
-  
+
   // If the switch changed, due to noise or pressing:
   if (reading != lastButtonState) {
     lastDebounceTime = millis();
   }
-  
+
   // Check if enough time has passed
   if ((millis() - lastDebounceTime) > DEBOUNCE_DELAY) {
     // If the button state has changed:
     if (reading != buttonState) {
       buttonState = reading;
-      
+
       // Only trigger on button press (HIGH -> LOW transition)
       if (buttonState == LOW) {
         lastButtonState = reading;
@@ -981,14 +981,14 @@ bool readButtonDebounced() {
       }
     }
   }
-  
+
   lastButtonState = reading;
   return false;
 }
 
 void turnOnLED(byte ledNum) {
   turnOffAllLEDs();
-  switch(ledNum) {
+  switch (ledNum) {
     case 1: digitalWrite(LED_1, HIGH); break;
     case 2: digitalWrite(LED_2, HIGH); break;
     case 3: digitalWrite(LED_3, HIGH); break;
@@ -1006,7 +1006,7 @@ void turnOffAllLEDs() {
 void parsePlayerData(byte playerIndex, byte* buffer) {
   // Format: [PLAYER_ID][DATA_LENGTH][DATA...]
   byte dataLength = buffer[1] - '0';
-  
+
   players[playerIndex].inputLength = dataLength;
   for (byte i = 0; i < dataLength && i < 50; i++) {
     players[playerIndex].inputData[i] = buffer[2 + i] - '0';
@@ -1015,36 +1015,36 @@ void parsePlayerData(byte playerIndex, byte* buffer) {
 
 void evaluateResults() {
   SimonState lastGame = currentSession.prevState;
-  
+
   // Check if max level reached before processing
   if (currentSession.level >= MAX_LEVEL) {
     // All remaining players are winners!
     return;
   }
-  
+
   for (byte i = 0; i < 3; i++) {
     if (!players[i].isActive) continue;
-    
+
     bool correct = false;
-    
-    switch(lastGame) {
+
+    switch (lastGame) {
       case LED_GAME:
       case BUZ_GAME:
         // Check if pattern matches
         correct = checkPattern(i);
         break;
-        
+
       case US_GAME:
         // Check if distance is within tolerance
         correct = checkDistance(i);
         break;
-        
+
       case RECALL_GAME:
         // Check if number matches
         correct = checkRecallNumber(i);
         break;
     }
-    
+
     if (correct) {
       players[i].score += 10 * currentSession.level;
     } else {
@@ -1063,13 +1063,13 @@ bool checkPattern(byte playerIndex) {
   if (players[playerIndex].inputLength != patternLength) {
     return false;
   }
-  
+
   for (byte i = 0; i < patternLength; i++) {
     if (players[playerIndex].inputData[i] != currentPattern[i]) {
       return false;
     }
   }
-  
+
   return true;
 }
 
@@ -1079,7 +1079,7 @@ bool checkDistance(byte playerIndex) {
   for (byte i = 0; i < players[playerIndex].inputLength; i++) {
     playerDistance = playerDistance * 10 + players[playerIndex].inputData[i];
   }
-  
+
   // Allow 10% tolerance
   int tolerance = targetDistance / 10;
   return abs(playerDistance - targetDistance) <= tolerance;
@@ -1090,11 +1090,9 @@ bool checkRecallNumber(byte playerIndex) {
   if (players[playerIndex].inputLength != 3) {
     return false;
   }
-  
-  int playerNumber = players[playerIndex].inputData[0] * 100 +
-                     players[playerIndex].inputData[1] * 10 +
-                     players[playerIndex].inputData[2];
-  
+
+  int playerNumber = players[playerIndex].inputData[0] * 100 + players[playerIndex].inputData[1] * 10 + players[playerIndex].inputData[2];
+
   return playerNumber == memoryNumber;
 }
 
@@ -1108,8 +1106,8 @@ byte countActivePlayers() {
 
 SimonState getNextGameState() {
   SimonState lastGame = currentSession.prevState;
-  
-  switch(lastGame) {
+
+  switch (lastGame) {
     case LED_GAME: return BUZ_GAME;
     case BUZ_GAME: return US_GAME;
     case US_GAME: return RECALL_GAME;
@@ -1119,16 +1117,16 @@ SimonState getNextGameState() {
 }
 
 byte findWinner() {
-  byte winner = 255; // No winner
+  byte winner = 255;  // No winner
   int highestScore = -1;
-  
+
   for (byte i = 0; i < 3; i++) {
     if (players[i].score > highestScore) {
       highestScore = players[i].score;
       winner = i;
     }
   }
-  
+
   return winner;
 }
 
@@ -1136,14 +1134,14 @@ byte findWinner() {
 byte findAllWinners(byte* winnerArray) {
   int highestScore = -1;
   byte numWinners = 0;
-  
+
   // First pass: find highest score
   for (byte i = 0; i < 3; i++) {
     if (players[i].score > highestScore) {
       highestScore = players[i].score;
     }
   }
-  
+
   // Second pass: find all players with highest score
   if (highestScore >= 0) {
     for (byte i = 0; i < 3; i++) {
@@ -1153,7 +1151,6 @@ byte findAllWinners(byte* winnerArray) {
       }
     }
   }
-  
+
   return numWinners;
 }
-
