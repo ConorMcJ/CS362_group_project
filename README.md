@@ -7,7 +7,7 @@ This project implements a multiplayer survival memory game with **four Arduino d
 * **1 Simon Device (Master)**
 * **3 Player Devices (Players 1–3)**
 
-Each round consists of **5 mini-games**, each testing a different input modality.
+Each round consists of **4 mini-games**, each testing a different input modality.
 Simon sends game instructions, timers, and then individually polls players using a token system.
 Incorrect responses eliminate the player from the game.
 
