@@ -193,6 +193,18 @@ void pollSerial() {
 
 void handleS_LEVEL(const String &rest) {
   currentLevel = rest.toInt();
+
+  if (currentLevel > 18) {
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Max Level!");
+        lcd.setCursor(0, 1);
+        lcd.print("Game Complete");
+        pState = P_IDLE;
+        currentGame = PG_NONE;
+        alive = false;
+        return;
+  }
 }
 
 void handleS_MEM(const String &rest) {
