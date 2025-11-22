@@ -364,8 +364,8 @@ void handleLine(const String &line) {
   String rest = (c < 0) ? "" : line.substring(c + 1);
 
   if (cmd == "S_LEVEL") handleS_LEVEL(rest);
-  else if (cmd == "S_MEM") handleS_MEM(line);
-  else if (cmd == "S_TIME") handleS_TIME(line);
+  else if (cmd == "S_MEM") handleS_MEM(rest);
+  else if (cmd == "S_TIME") handleS_TIME(rest);
   else if (cmd == "S_LED_START") handleS_LED_START();
   else if (cmd == "S_BUZ_START") handleS_BUZ_START();
   else if (cmd == "S_US_START") handleS_US_START(line);
