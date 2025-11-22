@@ -93,19 +93,13 @@ Level 6 → 5 digits
 
 ### Timers Used by Mini-games
 
-**LED, BUZ**
+**LED, BUZZER**
 
 ```
 responseTime = round(6 + 1.5 × level)
 ```
 
-**US distance game**
-
-```
-8 seconds fixed
-```
-
-**IR recall**
+**US distance game, IR recall**
 
 ```
 8 seconds fixed
@@ -378,9 +372,8 @@ Otherwise:
 
 ### Both Sides
 
-* IR remote’s **digit→hex code mapping** must be finalized.
 * Adjust tolerances or timings if playtesting suggests improvements.
 
 ### Player Side
 
-* Add any missing IR hex bindings once identified.
+* IR remote’s **digit→hex code mapping** must be finalized.
