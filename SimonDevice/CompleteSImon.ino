@@ -88,6 +88,15 @@ const int usFixedTime  = 8;         // fixed 8 s
 bool recallPhaseInit     = false;
 bool recallResponsePhase = false;
 
+// starting melody millis delay
+const int melodyNotes[4]     = {523, 659, 784, 1047};
+const int melodyDurations[4] = {150, 150, 150, 250};
+const int melodyPause        = 60;
+
+int  melodyIndex      = 0;
+bool melodyPlaying    = false;
+unsigned long melodyNextEvent = 0;
+
 // Timer / HUD
 int  responseTimeSec        = 0;
 unsigned long responseWindow = 0;
@@ -164,16 +173,35 @@ bool startShown    = false;
 bool memSent       = false;
 bool gameOverShown = false;
 
-void playStartMelody() {
-  int notes[]     = { 523, 659, 784, 1047 };
-  int durations[] = { 150, 150, 150, 250 };
-  int pause       = 60;
-  for (int i = 0; i < 4; i++) {
-    tone(buzzerPin, notes[i], durations[i]);
-    delay(durations[i] + pause);
-  }
-  noTone(buzzerPin);
+
+void startMelody() {
+  melodyIndex      = 0;
+  melodyPlaying    = true;
+  melodyNextEvent  = millis();
 }
+
+void updateMelody() {
+  if (!melodyPlaying) return;
+
+  unsigned long now = millis();
+  if (now >= melodyNextEvent) {
+
+    if (melodyIndex >= 4) {
+      noTone(buzzerPin);
+      melodyPlaying = false;
+      return;
+    }
+
+    int freq = melodyNotes[melodyIndex];
+    int dur  = melodyDurations[melodyIndex];
+
+    tone(buzzerPin, freq, dur);
+
+    melodyNextEvent = now + dur + melodyPause;
+    melodyIndex++;
+  }
+}
+
 
 void showMenu() {
   lcd.clear();
@@ -217,7 +245,7 @@ void startGame() {
   currentMiniGame = MG_NONE;
 
   mySerial.println("S_LEVEL," + String(level));
-  playStartMelody();
+  startMelody();
 
   lcd.clear();
   lcd.print("Starting...");
@@ -830,6 +858,7 @@ void setup() {
 
 void loop() {
   handleMenuButtons();
+  updateMelody();
 
   switch(simonState) {
     case MENU:
