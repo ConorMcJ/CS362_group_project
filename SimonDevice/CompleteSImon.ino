@@ -797,6 +797,14 @@ void advanceOrEnd() {
 
   if (currentMiniGame==MG_MEM) {
     level++;
+
+    if (level > 18) {
+        lcd.clear();
+        lcd.print("Max Level!");
+        simonState = GAME_OVER;
+        return;
+    }
+    
     mySerial.println("S_LEVEL," + String(level));
 
     startShown=false;
