@@ -24,6 +24,8 @@
 
 #include <SoftwareSerial.h>
 #include <IRremote.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
 // ============= CONFIGURATION =============
 #include "config.h"  // Contains PLAYER_ID (1, 2, or 3)
@@ -90,6 +92,29 @@ unsigned long lastJoystickInput = 0;
 IRrecv irrecv(IR_PIN);
 decode_results results;
 
+// ============= LCD DEBUG =============
+LiquidCrystal_I2C lcd(0x27, 16, 2);  // I2C address 0x27, 16x2 display
+unsigned long lastLCDUpdate = 0;
+const unsigned long LCD_UPDATE_INTERVAL = 100;  // Update LCD every 100ms max
+
+// Debug helper to get state name
+const char* getStateName(PlayerState state) {
+  switch (state) {
+    case WAITING: return "WAITING";
+    case LED_INPUT: return "LED_INPUT";
+    case BUZZER_INPUT: return "BUZ_INPUT";
+    case US_CAPTURE: return "US_CAPTURE";
+    case RECALL_INPUT: return "RECALL_IN";
+    case DATA_READY: return "DATA_RDY";
+    default: return "UNKNOWN";
+  }
+}
+
+// LCD debug helper - updates display with state and data info
+void debugLCD(const char* line1, const char* line2 = "");
+void debugLCDState();
+void debugLCDInput(const char* inputType, int value);
+
 // ============= FORWARD DECLARATIONS =============
 void checkForCommands();
 void processCommand(byte* cmd, byte len);
@@ -104,6 +129,17 @@ void sendChunkedPattern(byte* pattern, byte length);
 
 // ============= SETUP =============
 void setup() {
+  // Initialize LCD first for debug output
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Player ");
+  lcd.print(PLAYER_ID);
+  lcd.print(" Init");
+  lcd.setCursor(0, 1);
+  lcd.print("Starting...");
+  
   // Serial communication
   mySerial.begin(9600);
   
@@ -123,6 +159,15 @@ void setup() {
   
   // Seed random (if needed for future use)
   randomSeed(analogRead(A1));
+  
+  // Show ready message
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("P");
+  lcd.print(PLAYER_ID);
+  lcd.print(":WAITING");
+  lcd.setCursor(0, 1);
+  lcd.print("Ready for Simon");
 }
 
 // ============= MAIN LOOP =============
@@ -187,6 +232,15 @@ void processCommand(byte* cmd, byte len) {
   
   char command = cmd[0];
   
+  // Debug: Show received command
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("CMD:");
+  lcd.print((char)command);
+  if (len > 1) {
+    lcd.print((char)cmd[1]);
+  }
+  
   switch (command) {
     case 'W':  // Wait - return to idle
       currentState = WAITING;
@@ -196,6 +250,8 @@ void processCommand(byte* cmd, byte len) {
       recallIndex = 0;
       capturedDistance = 0;
       lastGameType = WAITING;
+      lcd.setCursor(0, 1);
+      lcd.print("->WAITING");
       break;
       
     case 'S':  // Start game
@@ -207,6 +263,8 @@ void processCommand(byte* cmd, byte len) {
             lastGameType = LED_INPUT;
             ledPatternIndex = 0;
             inputStartTime = millis();
+            lcd.setCursor(0, 1);
+            lcd.print("->LED_INPUT");
             break;
             
           case 'B':  // Buzzer game
@@ -214,12 +272,16 @@ void processCommand(byte* cmd, byte len) {
             lastGameType = BUZZER_INPUT;
             buzzerPatternIndex = 0;
             inputStartTime = millis();
+            lcd.setCursor(0, 1);
+            lcd.print("->BUZZER_INPUT");
             break;
             
           case 'U':  // Ultrasonic game
             currentState = US_CAPTURE;
             lastGameType = US_CAPTURE;
             capturedDistance = 0;
+            lcd.setCursor(0, 1);
+            lcd.print("->US_CAPTURE");
             break;
             
           case 'R':  // Recall game
@@ -227,6 +289,8 @@ void processCommand(byte* cmd, byte len) {
             lastGameType = RECALL_INPUT;
             recallIndex = 0;
             inputStartTime = millis();
+            lcd.setCursor(0, 1);
+            lcd.print("->RECALL_INPUT");
             break;
         }
       }
@@ -234,9 +298,14 @@ void processCommand(byte* cmd, byte len) {
       
     case 'R':  // Request data
       if (len > 1 && cmd[1] == ('0' + PLAYER_ID)) {
+        lcd.setCursor(0, 1);
+        lcd.print("Sending data...");
         // This is a request for our data - send it
         sendDataToSimon();
         currentState = WAITING;
+      } else {
+        lcd.setCursor(0, 1);
+        lcd.print("Not for me");
       }
       break;
       
@@ -248,27 +317,53 @@ void processCommand(byte* cmd, byte len) {
       recallIndex = 0;
       capturedDistance = 0;
       lastGameType = WAITING;
+      lcd.setCursor(0, 1);
+      lcd.print("->END GAME");
       break;
   }
 }
 
 void sendDataToSimon() {
+  // Debug: Show we're sending data
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("SENDING->Simon");
+  
   mySerial.write('@');
   mySerial.write('0' + PLAYER_ID);
   
   // Determine which data to send based on last game played
   switch (lastGameType) {
     case LED_INPUT:
+      lcd.setCursor(0, 1);
+      lcd.print("LED[");
+      lcd.print(ledPatternIndex);
+      lcd.print("]:");
+      for (byte i = 0; i < min((int)ledPatternIndex, 8); i++) {
+        lcd.print(ledPattern[i]);
+      }
       sendChunkedPattern(ledPattern, ledPatternIndex);
       break;
       
     case BUZZER_INPUT:
+      lcd.setCursor(0, 1);
+      lcd.print("BUZ[");
+      lcd.print(buzzerPatternIndex);
+      lcd.print("]:");
+      for (byte i = 0; i < min((int)buzzerPatternIndex, 8); i++) {
+        lcd.print(buzzerPattern[i]);
+      }
       sendChunkedPattern(buzzerPattern, buzzerPatternIndex);
       break;
       
     case US_CAPTURE:
       // Send distance (up to 3 digits)
       {
+        lcd.setCursor(0, 1);
+        lcd.print("US Dist: ");
+        lcd.print(capturedDistance);
+        lcd.print("cm");
+        
         char distStr[4];
         itoa(capturedDistance, distStr, 10);
         byte len = strlen(distStr);
@@ -281,6 +376,12 @@ void sendDataToSimon() {
       
     case RECALL_INPUT:
       // Send 3 digits
+      lcd.setCursor(0, 1);
+      lcd.print("RECALL: ");
+      for (byte i = 0; i < 3; i++) {
+        lcd.print(recallDigits[i]);
+      }
+      
       mySerial.write('0' + 3);
       for (byte i = 0; i < 3; i++) {
         mySerial.write('0' + recallDigits[i]);
@@ -289,6 +390,8 @@ void sendDataToSimon() {
       
     default:
       // No data - send empty (length 0)
+      lcd.setCursor(0, 1);
+      lcd.print("(no data)");
       mySerial.write('0');
       break;
   }
@@ -322,11 +425,16 @@ void sendChunkedPattern(byte* pattern, byte length) {
 
 // LED Game - Record button presses
 void handleLEDInputState() {
+  bool buttonPressed = false;
+  byte pressedButton = 0;
+  
   // Check button 1
   if (digitalRead(BUTTON_1) == LOW && 
       (millis() - lastButton1Press > DEBOUNCE_DELAY)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 1;
+      buttonPressed = true;
+      pressedButton = 1;
     }
     lastButton1Press = millis();
   }
@@ -336,6 +444,8 @@ void handleLEDInputState() {
       (millis() - lastButton2Press > DEBOUNCE_DELAY)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 2;
+      buttonPressed = true;
+      pressedButton = 2;
     }
     lastButton2Press = millis();
   }
@@ -345,6 +455,8 @@ void handleLEDInputState() {
       (millis() - lastButton3Press > DEBOUNCE_DELAY)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 3;
+      buttonPressed = true;
+      pressedButton = 3;
     }
     lastButton3Press = millis();
   }
@@ -354,26 +466,68 @@ void handleLEDInputState() {
       (millis() - lastButton4Press > DEBOUNCE_DELAY)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 4;
+      buttonPressed = true;
+      pressedButton = 4;
     }
     lastButton4Press = millis();
+  }
+  
+  // Debug: Show button press on LCD
+  if (buttonPressed) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("LED BTN:");
+    lcd.print(pressedButton);
+    lcd.setCursor(0, 1);
+    lcd.print("Pattern[");
+    lcd.print(ledPatternIndex);
+    lcd.print("]:");
+    // Show last few entries
+    for (byte i = (ledPatternIndex > 8 ? ledPatternIndex - 8 : 0); i < ledPatternIndex; i++) {
+      lcd.print(ledPattern[i]);
+    }
   }
 }
 
 // Buzzer Game - Record joystick moves
 void handleBuzzerInputState() {
   int yVal = analogRead(JOYSTICK_Y);
+  bool inputRecorded = false;
+  const char* direction = "";
   
   if (millis() - lastJoystickInput > JOYSTICK_DEBOUNCE) {
     if (yVal < 300) {  // Joystick pushed down = LOW tone (0)
       if (buzzerPatternIndex < MAX_PATTERN_LEN) {
         buzzerPattern[buzzerPatternIndex++] = 0;
+        inputRecorded = true;
+        direction = "DOWN(0)";
       }
       lastJoystickInput = millis();
     } else if (yVal > 700) {  // Joystick pushed up = HIGH tone (1)
       if (buzzerPatternIndex < MAX_PATTERN_LEN) {
         buzzerPattern[buzzerPatternIndex++] = 1;
+        inputRecorded = true;
+        direction = "UP(1)";
       }
       lastJoystickInput = millis();
+    }
+  }
+  
+  // Debug: Show joystick input on LCD
+  if (inputRecorded) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("JOY:");
+    lcd.print(direction);
+    lcd.print(" Y=");
+    lcd.print(yVal);
+    lcd.setCursor(0, 1);
+    lcd.print("Buzz[");
+    lcd.print(buzzerPatternIndex);
+    lcd.print("]:");
+    // Show last few entries
+    for (byte i = (buzzerPatternIndex > 8 ? buzzerPatternIndex - 8 : 0); i < buzzerPatternIndex; i++) {
+      lcd.print(buzzerPattern[i]);
     }
   }
 }
@@ -381,6 +535,20 @@ void handleBuzzerInputState() {
 // Ultrasonic Game - Capture distance
 void handleUSCaptureState() {
   capturedDistance = measureDistance();
+  
+  // Debug: Show captured distance on LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("US CAPTURED!");
+  lcd.setCursor(0, 1);
+  lcd.print("Dist: ");
+  lcd.print(capturedDistance);
+  lcd.print(" cm");
+  if (capturedDistance == 0) {
+    lcd.setCursor(12, 1);
+    lcd.print("ERR");
+  }
+  
   currentState = DATA_READY;
 }
 
@@ -388,22 +556,72 @@ void handleUSCaptureState() {
 void handleRecallInputState() {
   // Check timeout
   if (millis() - inputStartTime > RECALL_TIMEOUT) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("RECALL TIMEOUT!");
+    lcd.setCursor(0, 1);
+    lcd.print("Got ");
+    lcd.print(recallIndex);
+    lcd.print(" digits");
     currentState = DATA_READY;
     return;
+  }
+  
+  // Periodic update showing time remaining (every second)
+  static unsigned long lastTimeUpdate = 0;
+  if (millis() - lastTimeUpdate > 1000) {
+    unsigned long elapsed = millis() - inputStartTime;
+    unsigned long remaining = (RECALL_TIMEOUT - elapsed) / 1000;
+    lcd.setCursor(0, 0);
+    lcd.print("RECALL ");
+    lcd.print(remaining);
+    lcd.print("s  ");
+    lcd.setCursor(0, 1);
+    lcd.print("Digits[");
+    lcd.print(recallIndex);
+    lcd.print("/3]:");
+    for (byte i = 0; i < recallIndex; i++) {
+      lcd.print(recallDigits[i]);
+    }
+    lcd.print("   ");
+    lastTimeUpdate = millis();
   }
   
   // Check for IR input
   if (irrecv.decode(&results)) {
     byte digit = decodeIRDigit(results.value);
     
+    // Debug: Show IR code received
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("IR:0x");
+    lcd.print(results.value, HEX);
+    
     if (digit <= 9 && recallIndex < 3) {
       recallDigits[recallIndex++] = digit;
+      lcd.setCursor(0, 1);
+      lcd.print("Digit ");
+      lcd.print(digit);
+      lcd.print(" -> [");
+      lcd.print(recallIndex);
+      lcd.print("/3]");
+    } else if (digit == 255) {
+      lcd.setCursor(0, 1);
+      lcd.print("Unknown code!");
     }
     
     irrecv.resume();  // Receive next value
     
     // If 3 digits entered, done
     if (recallIndex >= 3) {
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("RECALL COMPLETE!");
+      lcd.setCursor(0, 1);
+      lcd.print("Number: ");
+      for (byte i = 0; i < 3; i++) {
+        lcd.print(recallDigits[i]);
+      }
       currentState = DATA_READY;
     }
   }
@@ -435,17 +653,19 @@ int measureDistance() {
 
 byte decodeIRDigit(unsigned long code) {
   // Map IR remote codes to digits 0-9
+  // NOTE: These values depend on your specific IR remote
+  // Use a test sketch to print received codes and update as needed
   switch (code) {
     case 0xFF16E9: return 0;
-    case 0xFF30CF: return 1;
+    case 0xFF0CF3: return 1;
     case 0xFF18E7: return 2;
-    case 0xFF7A85: return 3;
-    case 0xFF10EF: return 4;
-    case 0xFF38C7: return 5;
+    case 0xFF5EA1: return 3;
+    case 0xFF08F7: return 4;
+    case 0xFF1CE3: return 5;
     case 0xFF5AA5: return 6;
     case 0xFF42BD: return 7;
-    case 0xFF4AB5: return 8;
-    case 0xFF52AD: return 9;
+    case 0xFF52AD: return 8;
+    case 0xFF4AB5: return 9;
     default: return 255;  // Invalid code
   }
 }
