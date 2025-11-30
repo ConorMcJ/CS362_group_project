@@ -1,5 +1,5 @@
 /*
- * Player 2 Device - Simon Says Multiplayer Game
+ * Player 1 Device - Simon Says Multiplayer Game
  * 
  * This device responds to commands from the Simon device and collects
  * player input for various mini-games:
