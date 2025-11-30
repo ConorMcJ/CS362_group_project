@@ -435,10 +435,8 @@ int measureDistance() {
 
 byte decodeIRDigit(unsigned long code) {
   // Map IR remote codes to digits 0-9
-  // NOTE: These values depend on your specific IR remote
-  // Use a test sketch to print received codes and update as needed
   switch (code) {
-    case 0xFF6897: return 0;
+    case 0xFF16E9: return 0;
     case 0xFF30CF: return 1;
     case 0xFF18E7: return 2;
     case 0xFF7A85: return 3;

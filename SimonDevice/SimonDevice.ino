@@ -488,9 +488,9 @@ void handleLEDGameState() {
       // Signal players to start recording
       sendCommand('S', 'L');  // Start LED game
       lcd.setCursor(0, 0);
-      lcd.print("      Go!       ")
+      lcd.print("      Go!       ");
 
-        stateStartTime = millis();
+      stateStartTime = millis();
       lcd.setCursor(0, 1);
     }
   } else {
@@ -498,9 +498,9 @@ void handleLEDGameState() {
     unsigned long inputTime = 5000 + (currentSession.level * 1000);
     unsigned long elapsed = millis() - stateStartTime;
 
-    lcd.print("")
+    lcd.print("");
 
-      if (elapsed >= inputTime) {
+    if (elapsed >= inputTime) {
       // Time's up, process results
       currentSession.prevState = LED_GAME;
       currentSession.currentState = PROCESS_RESULTS;
