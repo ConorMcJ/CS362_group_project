@@ -31,8 +31,9 @@
 #include "config.h"  // Contains PLAYER_ID (1, 2, or 3)
 
 // ============= PIN DEFINITIONS =============
-#define RX 10
-#define TX 11
+// Using Serial1 on pins 0 (RX) and 1 (TX) for R4
+#define RX 0
+#define TX_PIN 1
 
 #define BUTTON_1 2
 #define BUTTON_2 3
@@ -66,7 +67,8 @@ PlayerState currentState = WAITING;
 PlayerState lastGameType = WAITING;  // Track which game type collected data
 
 // ============= COMMUNICATION =============
-SoftwareSerial mySerial(RX, TX);
+// Using hardware Serial1 instead of SoftwareSerial for R4 compatibility
+#define mySerial Serial1
 
 // ============= INPUT STORAGE =============
 byte ledPattern[MAX_PATTERN_LEN];
@@ -217,7 +219,6 @@ void loop() {
   }
 }
 
-// ============= COMMUNICATION =============
 void checkForCommands() {
   static bool inMessage = false;
   static byte msgBuffer[10];
@@ -225,7 +226,7 @@ void checkForCommands() {
   
   while (mySerial.available() > 0) {
     char c = mySerial.read();
-    
+
     if (c == '$') {
       // Start of message
       inMessage = true;
