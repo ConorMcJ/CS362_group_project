@@ -114,6 +114,9 @@
 // Simon device state enumeration
 enum SimonState {
   MENU,
+  SETTINGS_MENU,
+  DEBUG_SELECT,
+  DEBUG_SHOW_MEMORY,
   WAITING_START,
   SEND_MEMORY_NUM,
   LED_GAME,
@@ -134,6 +137,10 @@ struct Session {
 };
 
 Session currentSession = { MENU, MENU, 1, 3 };
+
+// Debug mode tracking
+bool debugModeActive = false;
+SimonState debugSelectedGame = LED_GAME;
 
 // State tracking variables
 unsigned long stateStartTime = 0;
@@ -179,6 +186,8 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Forward declarations
 void handleMenuState();
+void handleSettingsMenuState();
+void handleDebugSelectState();
 void handleWaitingStartState();
 void handleSendMemoryNumState();
 void handleLEDGameState();
@@ -203,6 +212,7 @@ byte countActivePlayers();
 SimonState getNextGameState();
 byte findWinner();
 byte findAllWinners(byte* winnerArray);
+void resetPlayerScores();
 
 void setup() {
   // Define TX and RX pin modes for SoftwareSerial
@@ -257,6 +267,18 @@ void loop() {
       handleMenuState();
       break;
 
+    case SETTINGS_MENU:
+      handleSettingsMenuState();
+      break;
+
+    case DEBUG_SELECT:
+      handleDebugSelectState();
+      break;
+
+    case DEBUG_SHOW_MEMORY:
+      handleDebugShowMemoryState();
+      break;
+
     case WAITING_START:
       handleWaitingStartState();
       break;
@@ -300,7 +322,7 @@ void loop() {
   }
 }
 
-// ============= STATE HANDLERS =============
+// State handlers
 
 void handleMenuState() {
   static bool menuInitialized = false;
@@ -362,22 +384,229 @@ void handleMenuState() {
   if (readButtonDebounced()) {
     if (selectedOption == 0) {
       // Start game
+      debugModeActive = false;  // Normal game mode
       currentSession.prevState = MENU;
       currentSession.currentState = WAITING_START;
       menuInitialized = false;
       lastSelectedOption = 255;
       stateStartTime = millis();
     } else {
-      // Settings - show a simple message for now
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Settings");
-      lcd.setCursor(0, 1);
-      lcd.print("to be implemented");
-      delay(1500);              // Show message briefly
-      menuInitialized = false;  // Force menu redraw
+      // Settings menu
+      currentSession.prevState = MENU;
+      currentSession.currentState = SETTINGS_MENU;
+      menuInitialized = false;
+      lastSelectedOption = 255;
+      stateStartTime = millis();
+    }
+  }
+}
+
+void handleSettingsMenuState() {
+  static bool initialized = false;
+  static byte selectedOption = 0;        // 0=Exit, 1=Debug
+  static byte lastSelectedOption = 255;
+  static unsigned long lastJoystickRead = 0;
+  const unsigned long JOYSTICK_DEBOUNCE = 50;
+
+  if (!initialized) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Settings Menu");
+    lcd.setCursor(0, 1);
+    lcd.print(">Exit     Debug");
+    
+    initialized = true;
+    selectedOption = 0;
+    lastSelectedOption = 0;
+  }
+
+  // Read joystick for menu navigation
+  if (millis() - lastJoystickRead > JOYSTICK_DEBOUNCE) {
+    int xVal = analogRead(JOYSTICK_X);
+
+    if (xVal < 300 && selectedOption != 0) {
+      selectedOption = 0;
+      lastJoystickRead = millis();
+    } else if (xVal > 700 && selectedOption != 1) {
+      selectedOption = 1;
+      lastJoystickRead = millis();
+    }
+  }
+
+  // Update LCD if selection changed
+  if (selectedOption != lastSelectedOption) {
+    lcd.setCursor(0, 1);
+    if (selectedOption == 0) {
+      lcd.print(">Exit     Debug ");
+    } else {
+      lcd.print(" Exit    >Debug ");
+    }
+    lastSelectedOption = selectedOption;
+  }
+
+  // Check button press
+  if (readButtonDebounced()) {
+    if (selectedOption == 0) {
+      // Exit - return to main menu, reset scores
+      debugModeActive = false;
+      resetPlayerScores();
+      currentSession.prevState = SETTINGS_MENU;
+      currentSession.currentState = MENU;
+      initialized = false;
+      lastSelectedOption = 255;
+    } else {
+      // Debug mode - go to game selector
+      debugModeActive = true;
+      // Reset scores when first entering debug mode
+      resetPlayerScores();
+      // Initialize all players as active
+      for (byte i = 0; i < 3; i++) {
+        players[i].isActive = true;
+        players[i].inputLength = 0;
+      }
+      currentSession.level = 1;
+      // Tell players to wait
+      sendCommand('W');
+      currentSession.prevState = SETTINGS_MENU;
+      currentSession.currentState = DEBUG_SELECT;
+      initialized = false;
       lastSelectedOption = 255;
     }
+  }
+}
+
+void handleDebugSelectState() {
+  static bool initialized = false;
+  static byte selectedGame = 0;  // 0=LED, 1=BUZ, 2=US, 3=RECALL
+  static byte lastSelectedGame = 255;
+  static unsigned long lastJoystickRead = 0;
+  const unsigned long JOYSTICK_DEBOUNCE = 50;
+
+  if (!initialized) {
+    lcd.clear();
+    // Display: LED  BUZ
+    //          US   RCL
+    lcd.setCursor(0, 0);
+    lcd.print(">LED        BUZ");
+    lcd.setCursor(0, 1);
+    lcd.print(" US         RCL");
+    
+    // Initialize players for debug round
+    for (byte i = 0; i < 3; i++) {
+      players[i].isActive = true;
+      players[i].inputLength = 0;
+    }
+    // Note: scores preserved from previous debug games
+    
+    initialized = true;
+    selectedGame = 0;
+    lastSelectedGame = 255;
+  }
+
+  // Read joystick for game selection
+  if (millis() - lastJoystickRead > JOYSTICK_DEBOUNCE) {
+    int xVal = analogRead(JOYSTICK_X);
+    int yVal = analogRead(JOYSTICK_Y);
+
+    byte newSelection = selectedGame;
+
+    // Left/Right movement
+    if (xVal < 300) {
+      // Left
+      if (selectedGame == 1) newSelection = 0;      // BUZ -> LED
+      else if (selectedGame == 3) newSelection = 2; // RCL -> US
+    } else if (xVal > 700) {
+      // Right
+      if (selectedGame == 0) newSelection = 1;      // LED -> BUZ
+      else if (selectedGame == 2) newSelection = 3; // US -> RCL
+    }
+    
+    // Up/Down movement
+    if (yVal < 300) {
+      // Up
+      if (selectedGame == 2) newSelection = 0;      // US -> LED
+      else if (selectedGame == 3) newSelection = 1; // RCL -> BUZ
+    } else if (yVal > 700) {
+      // Down
+      if (selectedGame == 0) newSelection = 2;      // LED -> US
+      else if (selectedGame == 1) newSelection = 3; // BUZ -> RCL
+    }
+
+    if (newSelection != selectedGame) {
+      selectedGame = newSelection;
+      lastJoystickRead = millis();
+    }
+  }
+
+  // Update LCD if selection changed
+  if (selectedGame != lastSelectedGame) {
+    lcd.setCursor(0, 0);
+    lcd.print(selectedGame == 0 ? ">LED" : " LED");
+    lcd.setCursor(12, 0);
+    lcd.print(selectedGame == 1 ? ">BUZ" : " BUZ");
+    lcd.setCursor(0, 1);
+    lcd.print(selectedGame == 2 ? ">US " : " US ");
+    lcd.setCursor(12, 1);
+    lcd.print(selectedGame == 3 ? ">RCL" : " RCL");
+    lastSelectedGame = selectedGame;
+  }
+
+  // Check button press
+  if (readButtonDebounced()) {
+    // Store the selected game for returning after PROCESS_RESULTS
+    debugSelectedGame = (selectedGame == 0) ? LED_GAME : 
+                        (selectedGame == 1) ? BUZ_GAME : 
+                        (selectedGame == 2) ? US_GAME : RECALL_GAME;
+    
+    // For RECALL_GAME, we need to show the memory number first
+    if (debugSelectedGame == RECALL_GAME) {
+      // Generate memory number and go to show state
+      memoryNumber = random(100, 1000);
+      currentSession.prevState = DEBUG_SELECT;
+      currentSession.currentState = DEBUG_SHOW_MEMORY;
+      initialized = false;
+      lastSelectedGame = 255;
+      stateStartTime = millis();
+    } else {
+      // Go directly to the selected game
+      currentSession.prevState = DEBUG_SELECT;
+      currentSession.currentState = debugSelectedGame;
+      initialized = false;
+      lastSelectedGame = 255;
+      stateStartTime = millis();
+    }
+  }
+}
+
+// Handle debug show memory state (non-blocking display before RECALL_GAME)
+void handleDebugShowMemoryState() {
+  static bool initialized = false;
+  const unsigned long DISPLAY_DURATION = 3000;
+
+  if (!initialized) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Remember:");
+    lcd.setCursor(0, 1);
+    lcd.print("   ");
+    lcd.print(memoryNumber);
+    initialized = true;
+    stateStartTime = millis();
+  }
+
+  // After 3 seconds, go to RECALL_GAME
+  if (millis() - stateStartTime >= DISPLAY_DURATION) {
+    currentSession.prevState = DEBUG_SHOW_MEMORY;
+    currentSession.currentState = RECALL_GAME;
+    initialized = false;
+    stateStartTime = millis();
+  }
+}
+
+// Helper function to reset player scores
+void resetPlayerScores() {
+  for (byte i = 0; i < 3; i++) {
+    players[i].score = 0;
   }
 }
 
@@ -762,23 +991,44 @@ void handleProcessResultsState() {
     // Check for game over conditions
     if (activePlayers == 0 || currentSession.level >= MAX_LEVEL) {
       // Game over: all eliminated OR max level reached
-      currentSession.prevState = PROCESS_RESULTS;
-      currentSession.currentState = GAME_OVER;
+      if (debugModeActive) {
+        // In debug mode, reset scores and return to settings menu
+        resetPlayerScores();
+        currentSession.prevState = PROCESS_RESULTS;
+        currentSession.currentState = SETTINGS_MENU;
+      } else {
+        currentSession.prevState = PROCESS_RESULTS;
+        currentSession.currentState = GAME_OVER;
+      }
     } else if (activePlayers == 1) {
       // Single winner - game over
-      currentSession.prevState = PROCESS_RESULTS;
-      currentSession.currentState = GAME_OVER;
-    } else {
-      // Multiple players still active - continue
-      SimonState nextGame = getNextGameState();
-
-      if (nextGame == SEND_MEMORY_NUM) {
-        // Completed a round, increase level
-        currentSession.level++;
+      if (debugModeActive) {
+        // In debug mode, reset scores and return to settings menu
+        resetPlayerScores();
+        currentSession.prevState = PROCESS_RESULTS;
+        currentSession.currentState = SETTINGS_MENU;
+      } else {
+        currentSession.prevState = PROCESS_RESULTS;
+        currentSession.currentState = GAME_OVER;
       }
+    } else {
+      // Multiple players still active
+      if (debugModeActive) {
+        // In debug mode, return to settings menu (preserve scores)
+        currentSession.prevState = PROCESS_RESULTS;
+        currentSession.currentState = SETTINGS_MENU;
+      } else {
+        // Normal game - continue to next game
+        SimonState nextGame = getNextGameState();
 
-      currentSession.prevState = PROCESS_RESULTS;
-      currentSession.currentState = nextGame;
+        if (nextGame == SEND_MEMORY_NUM) {
+          // Completed a round, increase level
+          currentSession.level++;
+        }
+
+        currentSession.prevState = PROCESS_RESULTS;
+        currentSession.currentState = nextGame;
+      }
     }
 
     initialized = false;
@@ -1009,7 +1259,7 @@ bool receivePlayerData(byte playerID, byte* buffer, byte maxLen, unsigned long t
   return false;  // Timeout
 }
 
-// ============= HELPER FUNCTIONS =============
+// Helper functions
 
 bool readButtonDebounced() {
   // Read the current state
@@ -1171,8 +1421,8 @@ bool checkDistance(byte playerIndex) {
     playerDistance = playerDistance * 10 + players[playerIndex].inputData[i];
   }
 
-  // Allow 10% tolerance
-  int tolerance = targetDistance / 10;
+  // Allow ±7cm tolerance
+  const int tolerance = 7;
   return abs(playerDistance - targetDistance) <= tolerance;
 }
 

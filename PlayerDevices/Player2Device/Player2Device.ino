@@ -104,8 +104,7 @@ byte stableButton3State = HIGH;
 byte stableButton4State = HIGH;
 
 // ============= IR REMOTE =============
-IRrecv irrecv(IR_PIN);
-decode_results results;
+// IRremote 4.x uses global IrReceiver object - no separate declaration needed
 
 // ============= LCD DEBUG =============
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // I2C address 0x27, 16x2 display
@@ -170,8 +169,8 @@ void setup() {
   pinMode(ECHO_PIN, INPUT);
   digitalWrite(TRIG_PIN, LOW);
   
-  // IR receiver
-  irrecv.enableIRIn();
+  // IR receiver (IRremote 4.x API)
+  IrReceiver.begin(IR_PIN, ENABLE_LED_FEEDBACK);
   
   // Seed random (if needed for future use)
   randomSeed(analogRead(A1));
@@ -600,30 +599,37 @@ void handleRecallInputState() {
     lastTimeUpdate = millis();
   }
   
-  // Check for IR input
-  if (irrecv.decode(&results)) {
-    byte digit = decodeIRDigit(results.value);
+  // Check for IR input (IRremote 4.x API)
+  if (IrReceiver.decode()) {
+    // Get the raw command code - use decodedRawData for full code
+    unsigned long irCode = IrReceiver.decodedIRData.decodedRawData;
+    byte digit = decodeIRDigit(irCode);
     
     // Debug: Show IR code received
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("IR:0x");
-    lcd.print(results.value, HEX);
+    lcd.print(irCode, HEX);
+    
+    // Also show the command byte (useful for NEC remotes)
+    lcd.setCursor(0, 1);
+    lcd.print("Cmd:");
+    lcd.print(IrReceiver.decodedIRData.command, HEX);
     
     if (digit <= 9 && recallIndex < 3) {
       recallDigits[recallIndex++] = digit;
-      lcd.setCursor(0, 1);
-      lcd.print("Digit ");
+      lcd.setCursor(8, 1);
+      lcd.print("D");
       lcd.print(digit);
-      lcd.print(" -> [");
+      lcd.print("[");
       lcd.print(recallIndex);
       lcd.print("/3]");
     } else if (digit == 255) {
-      lcd.setCursor(0, 1);
-      lcd.print("Unknown code!");
+      lcd.setCursor(8, 1);
+      lcd.print("Unknown!");
     }
     
-    irrecv.resume();  // Receive next value
+    IrReceiver.resume();  // Receive next value
     
     // If 3 digits entered, done
     if (recallIndex >= 3) {
@@ -692,7 +698,10 @@ int measureDistance() {
 byte decodeIRDigit(unsigned long code) {
   // Map IR remote codes to digits 0-9
   // NOTE: These values depend on your specific IR remote
-  // Use a test sketch to print received codes and update as needed
+  // IRremote 4.x may return codes in different formats
+  // The LCD will show what codes your remote sends - update these values accordingly
+  
+  // Common NEC remote codes (old library format - 24-bit)
   switch (code) {
     case 0xFF16E9: return 0;
     case 0xFF0CF3: return 1;
@@ -704,6 +713,23 @@ byte decodeIRDigit(unsigned long code) {
     case 0xFF42BD: return 7;
     case 0xFF52AD: return 8;
     case 0xFF4AB5: return 9;
-    default: return 255;  // Invalid code
   }
+  
+  // IRremote 4.x decodedRawData format may be different (32-bit with address)
+  // Extract just the command byte (lower 8 bits after inverting)
+  byte cmdByte = (code >> 16) & 0xFF;
+  switch (cmdByte) {
+    case 0x16: return 0;
+    case 0x0C: return 1;
+    case 0x18: return 2;
+    case 0x5E: return 3;
+    case 0x08: return 4;
+    case 0x1C: return 5;
+    case 0x5A: return 6;
+    case 0x42: return 7;
+    case 0x52: return 8;
+    case 0x4A: return 9;
+  }
+  
+  return 255;  // Invalid code
 }
