@@ -142,6 +142,40 @@ Session currentSession = { MENU, MENU, 1, 3 };
 bool debugModeActive = false;
 SimonState debugSelectedGame = LED_GAME;
 
+// --- MENU MUSIC ---
+// Note frequencies (Hz)
+#define NOTE_C4  262
+#define NOTE_D4  294
+#define NOTE_E4  330
+#define NOTE_F4  349
+#define NOTE_G4  392
+#define NOTE_A4  440
+#define NOTE_B4  494
+#define NOTE_C5  523
+#define NOTE_D5  587
+#define NOTE_E5  659
+#define NOTE_REST 0
+
+// Simple catchy melody (Simon Says theme)
+const int menuMelody[] = {
+  NOTE_E4, NOTE_G4, NOTE_C5, NOTE_B4, NOTE_A4, NOTE_G4,
+  NOTE_E4, NOTE_G4, NOTE_A4, NOTE_G4, NOTE_E4, NOTE_D4,
+  NOTE_E4, NOTE_G4, NOTE_C5, NOTE_B4, NOTE_A4, NOTE_G4,
+  NOTE_A4, NOTE_G4, NOTE_E4, NOTE_D4, NOTE_C4, NOTE_REST
+};
+const int menuNoteDurations[] = {
+  200, 200, 400, 200, 200, 400,
+  200, 200, 200, 200, 200, 400,
+  200, 200, 400, 200, 200, 400,
+  200, 200, 200, 200, 400, 800
+};
+const byte MENU_MELODY_LENGTH = 24;
+
+// Menu music state
+byte currentMenuNote = 0;
+unsigned long lastNoteTime = 0;
+bool menuMusicPlaying = false;
+
 // State tracking variables
 unsigned long stateStartTime = 0;
 unsigned long lastButtonCheck = 0;
@@ -187,6 +221,8 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 // Forward declarations
 void handleMenuState();
 void handleSettingsMenuState();
+void playMenuMusic();
+void stopMenuMusic();
 void handleDebugSelectState();
 void handleWaitingStartState();
 void handleSendMemoryNumState();
@@ -322,7 +358,9 @@ void loop() {
   }
 }
 
-// State handlers
+/*
+  STATE HANDLERS
+*/
 
 void handleMenuState() {
   static bool menuInitialized = false;
@@ -350,10 +388,18 @@ void handleMenuState() {
       players[i].inputLength = 0;
     }
 
+    // Start menu music
+    currentMenuNote = 0;
+    lastNoteTime = millis();
+    menuMusicPlaying = true;
+
     menuInitialized = true;
     lastSelectedOption = 0;
     stateStartTime = millis();
   }
+
+  // Play menu music (non-blocking)
+  playMenuMusic();
 
   // Read joystick for menu navigation with debouncing
   if (millis() - lastJoystickRead > JOYSTICK_DEBOUNCE) {
@@ -382,6 +428,7 @@ void handleMenuState() {
 
   // Check button press with debouncing
   if (readButtonDebounced()) {
+    stopMenuMusic();  // Stop music when leaving menu
     if (selectedOption == 0) {
       // Start game
       debugModeActive = false;  // Normal game mode
@@ -399,6 +446,38 @@ void handleMenuState() {
       stateStartTime = millis();
     }
   }
+}
+
+// --- MENU MUSIC FUNCTIONS ---
+void playMenuMusic() {
+  if (!menuMusicPlaying) return;
+
+  unsigned long currentTime = millis();
+  
+  // Check if it's time for the next note
+  if (currentTime - lastNoteTime >= (unsigned long)menuNoteDurations[currentMenuNote]) {
+    // Move to next note
+    currentMenuNote++;
+    
+    // Loop the melody
+    if (currentMenuNote >= MENU_MELODY_LENGTH) {
+      currentMenuNote = 0;
+    }
+    
+    // Play the note (or rest)
+    if (menuMelody[currentMenuNote] == NOTE_REST) {
+      noTone(BUZZER);
+    } else {
+      tone(BUZZER, menuMelody[currentMenuNote]);
+    }
+    
+    lastNoteTime = currentTime;
+  }
+}
+
+void stopMenuMusic() {
+  menuMusicPlaying = false;
+  noTone(BUZZER);
 }
 
 void handleSettingsMenuState() {

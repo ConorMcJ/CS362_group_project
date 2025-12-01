@@ -27,10 +27,10 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
-// ============= CONFIGURATION =============
+// --- CONFIGURATION ---
 #include "config.h"  // Contains PLAYER_ID (1, 2, or 3)
 
-// ============= PIN DEFINITIONS =============
+// --- PIN DEFINITIONS ---
 #define RX 10
 #define TX 11
 
@@ -46,13 +46,13 @@
 
 #define IR_PIN 6
 
-// ============= CONSTANTS =============
+// --- CONSTANTS ---
 const byte MAX_PATTERN_LEN = 50;  // Support for higher levels with chunked transmission
 const unsigned long DEBOUNCE_DELAY = 50;      // 50ms button debounce
 const unsigned long JOYSTICK_DEBOUNCE = 300;  // 300ms joystick debounce
 const unsigned long RECALL_TIMEOUT = 10000;   // 10 seconds for recall input
 
-// ============= STATE MACHINE =============
+// --- STATE MACHINE ---
 enum PlayerState {
   WAITING,        // Idle, listening for commands
   LED_INPUT,      // Recording button presses for LED game
@@ -65,10 +65,10 @@ enum PlayerState {
 PlayerState currentState = WAITING;
 PlayerState lastGameType = WAITING;  // Track which game type collected data
 
-// ============= COMMUNICATION =============
+// --- COMMUNICATION ---
 SoftwareSerial mySerial(RX, TX);
 
-// ============= INPUT STORAGE =============
+// --- INPUT STORAGE ---
 byte ledPattern[MAX_PATTERN_LEN];
 byte ledPatternIndex = 0;
 
@@ -80,7 +80,7 @@ int capturedDistance = 0;
 byte recallDigits[3];
 byte recallIndex = 0;
 
-// ============= TIMING =============
+// --- TIMING ---
 unsigned long inputStartTime = 0;
 unsigned long lastButton1Press = 0;
 unsigned long lastButton2Press = 0;
@@ -88,7 +88,7 @@ unsigned long lastButton3Press = 0;
 unsigned long lastButton4Press = 0;
 unsigned long lastJoystickInput = 0;
 
-// ============= BUTTON STATE TRACKING =============
+// --- BUTTON STATE TRACKING ---
 // Track previous button states for edge detection (prevents repeat triggers while held)
 byte prevButton1State = HIGH;
 byte prevButton2State = HIGH;
@@ -101,10 +101,10 @@ byte stableButton2State = HIGH;
 byte stableButton3State = HIGH;
 byte stableButton4State = HIGH;
 
-// ============= IR REMOTE =============
-// IRremote 4.x uses global IrReceiver object - no separate declaration needed
+// IR Remote
+// IRremote 4.x uses global IrReceiver object, no separate declaration needed
 
-// ============= LCD DEBUG =============
+// LCD Debugging
 LiquidCrystal_I2C lcd(0x27, 16, 2);  // I2C address 0x27, 16x2 display
 unsigned long lastLCDUpdate = 0;
 const unsigned long LCD_UPDATE_INTERVAL = 100;  // Update LCD every 100ms max
@@ -127,7 +127,7 @@ void debugLCD(const char* line1, const char* line2 = "");
 void debugLCDState();
 void debugLCDInput(const char* inputType, int value);
 
-// ============= FORWARD DECLARATIONS =============
+// --- FORWARD DECLARATIONS ---
 void checkForCommands();
 void processCommand(byte* cmd, byte len);
 void handleLEDInputState();
@@ -140,7 +140,7 @@ byte decodeIRDigit(unsigned long code);
 void sendDataToSimon();
 void sendChunkedPattern(byte* pattern, byte length);
 
-// ============= SETUP =============
+// --- SETUP ---
 void setup() {
   // Initialize LCD first for debug output
   lcd.init();
@@ -183,7 +183,7 @@ void setup() {
   lcd.print("Ready for Simon");
 }
 
-// ============= MAIN LOOP =============
+// --- MAIN LOOP ---
 void loop() {
   // Always check for incoming commands from Simon
   checkForCommands();
@@ -216,7 +216,9 @@ void loop() {
   }
 }
 
-// ============= COMMUNICATION =============
+/*
+  COMMUNICATION
+*/
 void checkForCommands() {
   static bool inMessage = false;
   static byte msgBuffer[10];
@@ -434,7 +436,9 @@ void sendChunkedPattern(byte* pattern, byte length) {
   }
 }
 
-// ============= STATE HANDLERS =============
+/*
+  STATE HANDLERS
+*/
 
 // LED Game - Record button presses
 void handleLEDInputState() {
@@ -645,7 +649,7 @@ void handleRecallInputState() {
   }
 }
 
-// ============= HELPER FUNCTIONS =============
+// --- HELPER FUNCTIONS ---
 
 bool handlePushButton(byte reading, byte &prevReading, byte &stableState, unsigned long &lastDebounceTime) {
   bool pressed = false;
