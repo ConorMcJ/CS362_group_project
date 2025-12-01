@@ -88,6 +88,13 @@ unsigned long lastButton3Press = 0;
 unsigned long lastButton4Press = 0;
 unsigned long lastJoystickInput = 0;
 
+// ============= BUTTON STATE TRACKING =============
+// Track previous button states for edge detection (prevents repeat triggers while held)
+byte prevButton1State = HIGH;
+byte prevButton2State = HIGH;
+byte prevButton3State = HIGH;
+byte prevButton4State = HIGH;
+
 // ============= IR REMOTE =============
 IRrecv irrecv(IR_PIN);
 decode_results results;
@@ -428,8 +435,14 @@ void handleLEDInputState() {
   bool buttonPressed = false;
   byte pressedButton = 0;
   
-  // Check button 1
-  if (digitalRead(BUTTON_1) == LOW && 
+  // Read current button states
+  byte btn1 = digitalRead(BUTTON_1);
+  byte btn2 = digitalRead(BUTTON_2);
+  byte btn3 = digitalRead(BUTTON_3);
+  byte btn4 = digitalRead(BUTTON_4);
+  
+  // Check button 1 - only trigger on falling edge (HIGH->LOW) with debounce
+  if (btn1 == LOW && prevButton1State == HIGH && 
       (millis() - lastButton1Press > DEBOUNCE_DELAY)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 1;
@@ -438,9 +451,10 @@ void handleLEDInputState() {
     }
     lastButton1Press = millis();
   }
+  prevButton1State = btn1;
   
-  // Check button 2
-  if (digitalRead(BUTTON_2) == LOW && 
+  // Check button 2 - only trigger on falling edge (HIGH->LOW) with debounce
+  if (btn2 == LOW && prevButton2State == HIGH && 
       (millis() - lastButton2Press > DEBOUNCE_DELAY)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 2;
@@ -449,9 +463,10 @@ void handleLEDInputState() {
     }
     lastButton2Press = millis();
   }
+  prevButton2State = btn2;
   
-  // Check button 3
-  if (digitalRead(BUTTON_3) == LOW && 
+  // Check button 3 - only trigger on falling edge (HIGH->LOW) with debounce
+  if (btn3 == LOW && prevButton3State == HIGH && 
       (millis() - lastButton3Press > DEBOUNCE_DELAY)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 3;
@@ -460,9 +475,10 @@ void handleLEDInputState() {
     }
     lastButton3Press = millis();
   }
+  prevButton3State = btn3;
   
-  // Check button 4
-  if (digitalRead(BUTTON_4) == LOW && 
+  // Check button 4 - only trigger on falling edge (HIGH->LOW) with debounce
+  if (btn4 == LOW && prevButton4State == HIGH && 
       (millis() - lastButton4Press > DEBOUNCE_DELAY)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 4;
@@ -471,6 +487,7 @@ void handleLEDInputState() {
     }
     lastButton4Press = millis();
   }
+  prevButton4State = btn4;
   
   // Debug: Show button press on LCD
   if (buttonPressed) {
