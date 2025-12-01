@@ -5,49 +5,55 @@
 
 #define PLAYER_ID 2
 
-// LCD & SERIAL -------------------------------------------------------
+// ======================================================================
+// LCD & SERIAL
+// ======================================================================
 
 // I2C LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// Shared bus with Simon
-const int rxPin = 10;
-const int txPin = 11;
+// Dedicated line to SIMON (must match Simon Option-2)
+const int rxPin = 4;    // from Simon TX=5
+const int txPin = 5;    // to Simon RX=4
 SoftwareSerial mySerial(rxPin, txPin);
 
-// INPUT HARDWARE -----------------------------------------------------
+// ======================================================================
+// INPUT HARDWARE
+// ======================================================================
 
-// 4 LED-game buttons, left-to-right aligned with Simon LEDs (R,G,Y,B)
-const int btnPins[4] = {2, 3, 4, 5};
+// 4 LED-game buttons (R,G,Y,B in that order)
+const int btnPins[4] = {6, 7, 8, 9};
 
-// Joystick for BUZ game (Y axis only)
-const int joyYPin = A0;
+// Joystick for BUZ game (Y-axis only)
+const int joyYPin  = A0;
 const int JOY_LOW_T  = 300;
 const int JOY_HIGH_T = 700;
 
-// Ultrasonic sensor
-const int trigPin = 6;
-const int echoPin = 7;
+// Ultrasonic sensor (unique per player)
+const int trigPin = 10;
+const int echoPin = 11;
 
-// IR receiver (for recall game)
-const int irPin = 8;
+// IR Receiver
+const int irPin = 12;
 
-// STATE & GAME VARS --------------------------------------------------
+// ======================================================================
+// STATE & GAME VARS
+// ======================================================================
 
-bool alive = true;      // player alive or eliminated
+bool alive = true;
 int currentLevel = 1;
 
-String memoryNumber = "";  // from S_MEM
-String recallAnswer  = ""; // IR input
-String ledAnswer     = "";
-String buzAnswer     = "";
+String memoryNumber = "";
+String recallAnswer = "";
+String ledAnswer = "";
+String buzAnswer = "";
 
-// Time / countdown
+// countdown state
 int timeLeftSec = 0;
 unsigned long responseEndTime   = 0;
 unsigned long lastCountdownTick = 0;
 
-// For reading serial line based
+// For reading serial messages
 String serialInBuffer = "";
 
 // Button debouncing
@@ -55,11 +61,11 @@ int lastBtnState[4];
 unsigned long lastBtnChange[4];
 const unsigned long btnDebounce = 50;
 
-// Joystick input debouncing for buzzer game
+// BuzzGame joystick debouncing
 unsigned long lastJoyInputTime = 0;
 const unsigned long joyInputDelay = 250;
 
-// Player side view of minigame
+// mini-games
 enum PlayerMiniGame {
   PG_NONE,
   PG_MEM,
@@ -70,7 +76,7 @@ enum PlayerMiniGame {
 };
 PlayerMiniGame currentGame = PG_NONE;
 
-// High level player state
+// player high-level state
 enum PlayerState {
   P_IDLE,
   P_MEM_SHOW,
@@ -83,13 +89,11 @@ enum PlayerState {
 };
 PlayerState pState = P_IDLE;
 
+// ======================================================================
+// IR Remote Codes (UPDATE LATER WITH REAL READINGS)
+// ======================================================================
 
-// --------------------------------------------------------------------
-// ASSUMED NEC REMOTE BUTTON CODES (replace after testing IR sketch)
-// --------------------------------------------------------------------
-
-// <<< UPDATE CODES HERE LATER >>>
-#define IR_POWER   0xFFA25D   // red power button
+#define IR_POWER   0xFFA25D
 #define IR_0       0xFF9867
 #define IR_1       0xFF30CF
 #define IR_2       0xFF18E7
@@ -101,8 +105,9 @@ PlayerState pState = P_IDLE;
 #define IR_8       0xFF4AB5
 #define IR_9       0xFF52AD
 
-
-// HELPERS -------------------------------------------------------------
+// ======================================================================
+// LCD HELPERS
+// ======================================================================
 
 char gameCharFromMiniGame(PlayerMiniGame g) {
   switch (g) {
@@ -127,19 +132,16 @@ void drawBottomHUD() {
   lcd.print(" ");
 }
 
-// Show simple top line + HUD bottom
-void showTopMessage(const String &msg) {
+void showTopMessage(const String& msg) {
   lcd.clear();
-  lcd.setCursor(0, 0);
+  lcd.setCursor(0,0);
   lcd.print(msg);
   drawBottomHUD();
 }
 
-
-// Update top line for LED / BUZ / US / RECALL countdown
 void showTimedHUD(const char* tag) {
   lcd.clear();
-  lcd.setCursor(0, 0);
+  lcd.setCursor(0,0);
   lcd.print(tag);
   lcd.print(" T:");
   if (timeLeftSec < 10) lcd.print("0");
@@ -148,34 +150,33 @@ void showTimedHUD(const char* tag) {
   drawBottomHUD();
 }
 
-// Start countdown
 void startCountdown(int seconds) {
-  timeLeftSec       = seconds;
-  responseEndTime   = millis() + (unsigned long)seconds * 1000UL;
+  timeLeftSec = seconds;
+  responseEndTime = millis() + (unsigned long)seconds * 1000UL;
   lastCountdownTick = millis();
 }
 
-// Tick countdown
 void updateCountdownUI() {
   if (timeLeftSec <= 0) return;
-  unsigned long now = millis();
 
+  unsigned long now = millis();
   if (now - lastCountdownTick >= 1000) {
     lastCountdownTick += 1000;
     timeLeftSec--;
     if (timeLeftSec < 0) timeLeftSec = 0;
 
-    if (currentGame == PG_LED)       showTimedHUD("LED");
-    else if (currentGame == PG_BUZ)  showTimedHUD("BUZ");
-    else if (currentGame == PG_US)   showTimedHUD("US ");
+    if (currentGame == PG_LED) showTimedHUD("LED");
+    else if (currentGame == PG_BUZ) showTimedHUD("BUZ");
+    else if (currentGame == PG_US)  showTimedHUD("US ");
     else if (currentGame == PG_RECALL) showTimedHUD("MEM");
   }
 }
 
+// ======================================================================
+// SERIAL HANDLERS
+// ======================================================================
 
-// SERIAL PARSING ------------------------------------------------------
-
-void handleLine(const String &line);
+void handleLine(const String& line);
 
 void pollSerial() {
   while (mySerial.available()) {
@@ -191,53 +192,51 @@ void pollSerial() {
   }
 }
 
-void handleS_LEVEL(const String &rest) {
+void handleS_LEVEL(const String& rest) {
   currentLevel = rest.toInt();
 
   if (currentLevel > 18) {
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Max Level!");
-        lcd.setCursor(0, 1);
-        lcd.print("Game Complete");
-        pState = P_IDLE;
-        currentGame = PG_NONE;
-        alive = false;
-        return;
+    lcd.clear();
+    lcd.setCursor(0,0);
+    lcd.print("Max Level!");
+    lcd.setCursor(0,1);
+    lcd.print("Game Complete");
+    pState = P_IDLE;
+    alive = false;
   }
 }
 
-void handleS_MEM(const String &rest) {
+void handleS_MEM(const String& rest) {
   int comma = rest.indexOf(',');
-  String num = (comma < 0) ? rest : rest.substring(comma + 1);
+  String num = (comma < 0 ? rest : rest.substring(comma+1));
 
   memoryNumber = num;
-  currentGame  = PG_MEM;
-  pState       = P_MEM_SHOW;
+  currentGame = PG_MEM;
+  pState = P_MEM_SHOW;
 
   lcd.clear();
-  lcd.setCursor(0, 0);
+  lcd.setCursor(0,0);
   lcd.print("Mem: ");
   lcd.print(memoryNumber);
   drawBottomHUD();
 }
 
-void handleS_TIME(const String &rest) {
+void handleS_TIME(const String& rest) {
   int comma = rest.indexOf(',');
-  int t = (comma < 0) ? rest.toInt() : rest.substring(comma + 1).toInt();
+  int t = (comma < 0 ? rest.toInt() : rest.substring(comma+1).toInt());
 
   startCountdown(t);
 
-  if (currentGame == PG_LED) showTimedHUD("LED");
-  else if (currentGame == PG_BUZ) showTimedHUD("BUZ");
-  else if (currentGame == PG_US) showTimedHUD("US ");
+  if      (currentGame == PG_LED)    showTimedHUD("LED");
+  else if (currentGame == PG_BUZ)    showTimedHUD("BUZ");
+  else if (currentGame == PG_US)     showTimedHUD("US ");
   else if (currentGame == PG_RECALL) showTimedHUD("MEM");
 }
 
 void handleS_LED_START() {
   if (!alive) return;
   currentGame = PG_LED;
-  pState      = P_LED_INPUT;
+  pState = P_LED_INPUT;
   ledAnswer = "";
   showTopMessage("LED Ready...");
 }
@@ -245,25 +244,25 @@ void handleS_LED_START() {
 void handleS_BUZ_START() {
   if (!alive) return;
   currentGame = PG_BUZ;
-  pState      = P_BUZ_INPUT;
+  pState = P_BUZ_INPUT;
   buzAnswer = "";
   showTopMessage("BUZ Ready...");
 }
 
-void handleS_US_START(const String &rest) {
+void handleS_US_START(const String& rest) {
   if (!alive) return;
+
   currentGame = PG_US;
-  pState      = P_US_INPUT;
+  pState = P_US_INPUT;
 
   int comma = rest.indexOf(',');
-  int target = rest.substring(comma + 1).toInt();
+  int target = rest.substring(comma+1).toInt();
 
   lcd.clear();
-  lcd.setCursor(0, 0);
+  lcd.setCursor(0,0);
   lcd.print("Aim ");
   lcd.print(target);
   lcd.print("cm");
-
   drawBottomHUD();
 }
 
@@ -271,79 +270,71 @@ void handleS_RECALL_START() {
   if (!alive) return;
 
   currentGame = PG_RECALL;
-  pState      = P_MEM_RECALL_INPUT;
-
+  pState = P_MEM_RECALL_INPUT;
   recallAnswer = "";
 
   lcd.clear();
-  lcd.setCursor(0, 0);
+  lcd.setCursor(0,0);
   lcd.print("Recall:");
-
-  lcd.setCursor(0, 1);
   drawBottomHUD();
 }
 
-void handleS_REQ(const String &rest) {
+void handleS_REQ(const String& rest) {
   int c1 = rest.indexOf(',');
-  int c2 = rest.indexOf(',', c1 + 1);
-  if (c1 < 0 || c2 < 0) return;
+  int c2 = rest.indexOf(',',c1+1);
 
-  int id = rest.substring(c1 + 1, c2).toInt();
-  String type = rest.substring(c2 + 1);
+  if (c1<0 || c2<0) return;
+
+  int id = rest.substring(c1+1,c2).toInt();
+  String type = rest.substring(c2+1);
 
   if (id != PLAYER_ID || !alive) return;
 
   if (type == "LED") {
-    mySerial.print("P_RESP,");
-    mySerial.print(PLAYER_ID);
-    mySerial.print(",LED,");
+    mySerial.print("P_RESP,2,LED,");
     mySerial.print(ledAnswer);
     mySerial.print("\n");
     pState = P_WAIT_RESULT;
-
-  } else if (type == "BUZ") {
-    mySerial.print("P_RESP,");
-    mySerial.print(PLAYER_ID);
-    mySerial.print(",BUZ,");
+  }
+  else if (type == "BUZ") {
+    mySerial.print("P_RESP,2,BUZ,");
     mySerial.print(buzAnswer);
     mySerial.print("\n");
     pState = P_WAIT_RESULT;
-
-  } else if (type == "US") {
+  }
+  else if (type == "US") {
     long duration;
     digitalWrite(trigPin, LOW);
     delayMicroseconds(2);
     digitalWrite(trigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
+
     duration = pulseIn(echoPin, HIGH);
     int dist = duration * 0.0343 / 2;
 
-    mySerial.print("P_RESP,");
-    mySerial.print(PLAYER_ID);
-    mySerial.print(",US,");
+    mySerial.print("P_RESP,2,US,");
     mySerial.print(dist);
     mySerial.print("\n");
-
     pState = P_WAIT_RESULT;
-
-  } else if (type == "MEM") {
-    mySerial.print("P_RESP,");
-    mySerial.print(PLAYER_ID);
-    mySerial.print(",MEM,");
+  }
+  else if (type == "MEM") {
+    mySerial.print("P_RESP,2,MEM,");
     mySerial.print(recallAnswer);
     mySerial.print("\n");
     pState = P_WAIT_RESULT;
   }
 }
 
-void handleS_RES(const String &rest) {
+void handleS_RES(const String& rest) {
   int c1 = rest.indexOf(',');
-  int c2 = rest.indexOf(',', c1 + 1);
-  int c3 = rest.indexOf(',', c2 + 1);
+  int c2 = rest.indexOf(',',c1+1);
+  int c3 = rest.indexOf(',',c2+1);
 
-  int id = rest.substring(c1 + 1, c2).toInt();
-  String result = rest.substring(c3 + 1);
+  if (c1<0 || c2<0 || c3<0) return;
+
+  int id = rest.substring(c1+1,c2).toInt();
+  String result = rest.substring(c3+1);
 
   if (id != PLAYER_ID) return;
 
@@ -351,45 +342,47 @@ void handleS_RES(const String &rest) {
     alive = true;
     showTopMessage("OK!");
     pState = P_IDLE;
-  } else {
+  }
+  else {
     alive = false;
     showTopMessage("ELIMINATED!");
     pState = P_ELIMINATED;
   }
 }
 
-void handleLine(const String &line) {
+void handleLine(const String& line) {
   int c = line.indexOf(',');
-  String cmd = (c < 0) ? line : line.substring(0, c);
-  String rest = (c < 0) ? "" : line.substring(c + 1);
+  String cmd = (c<0 ? line : line.substring(0,c));
+  String rest = (c<0 ? ""     : line.substring(c+1));
 
-  if (cmd == "S_LEVEL") handleS_LEVEL(rest);
-  else if (cmd == "S_MEM") handleS_MEM(rest);
-  else if (cmd == "S_TIME") handleS_TIME(rest);
-  else if (cmd == "S_LED_START") handleS_LED_START();
-  else if (cmd == "S_BUZ_START") handleS_BUZ_START();
-  else if (cmd == "S_US_START") handleS_US_START(line);
+  if      (cmd == "S_LEVEL")        handleS_LEVEL(rest);
+  else if (cmd == "S_MEM")          handleS_MEM(rest);
+  else if (cmd == "S_TIME")         handleS_TIME(rest);
+  else if (cmd == "S_LED_START")    handleS_LED_START();
+  else if (cmd == "S_BUZ_START")    handleS_BUZ_START();
+  else if (cmd == "S_US_START")     handleS_US_START(rest);
   else if (cmd == "S_RECALL_START") handleS_RECALL_START();
-  else if (cmd == "S_REQ") handleS_REQ(line);
-  else if (cmd == "S_RES") handleS_RES(line);
+  else if (cmd == "S_REQ")          handleS_REQ(rest);
+  else if (cmd == "S_RES")          handleS_RES(rest);
 }
 
-
-// INPUT HANDLERS ------------------------------------------------------
+// ======================================================================
+// INPUT HANDLERS
+// ======================================================================
 
 void initButtons() {
-  for (int i = 0; i < 4; i++) {
+  for (int i=0;i<4;i++) {
     pinMode(btnPins[i], INPUT_PULLUP);
-    lastBtnState[i] = digitalRead(btnPins[i]);
+    lastBtnState[i]  = digitalRead(btnPins[i]);
     lastBtnChange[i] = millis();
   }
 }
 
 char charFromButtonIndex(int i) {
-  if (i == 0) return 'R';
-  if (i == 1) return 'G';
-  if (i == 2) return 'Y';
-  if (i == 3) return 'B';
+  if (i==0) return 'R';
+  if (i==1) return 'G';
+  if (i==2) return 'Y';
+  if (i==3) return 'B';
   return '?';
 }
 
@@ -398,7 +391,7 @@ void handleLEDInput() {
   unsigned long now = millis();
   if (now > responseEndTime) return;
 
-  for (int i = 0; i < 4; i++) {
+  for (int i=0;i<4;i++) {
     int reading = digitalRead(btnPins[i]);
 
     if (reading != lastBtnState[i]) {
@@ -406,15 +399,13 @@ void handleLEDInput() {
         lastBtnChange[i] = now;
         lastBtnState[i] = reading;
 
-        if (reading == LOW) {
+        if (reading == LOW)
           ledAnswer += charFromButtonIndex(i);
-        }
       }
     }
   }
 }
 
-// Buzzer game (H = up, L = down)
 void handleBuzzerInput() {
   if (!alive) return;
   unsigned long now = millis();
@@ -426,46 +417,39 @@ void handleBuzzerInput() {
     if (y < JOY_LOW_T) {
       buzAnswer += 'H';
       lastJoyInputTime = now;
-    } else if (y > JOY_HIGH_T) {
+    }
+    else if (y > JOY_HIGH_T) {
       buzAnswer += 'L';
       lastJoyInputTime = now;
     }
   }
 }
 
-// Ultrasonic done entirely at request time (above)
-
-
-// IR memory recall input
 void handleMemRecallInput() {
   if (millis() > responseEndTime) return;
-  if (IrReceiver.decode()) {
 
+  if (IrReceiver.decode()) {
     unsigned long code = IrReceiver.decodedIRData.decodedRawData;
 
     if (code == IR_POWER) {
-      // submit early
       responseEndTime = millis();
       IrReceiver.resume();
       return;
     }
 
-    // Only accept more digits if not exceeding memoryNumber length
-    int needed = memoryNumber.length();
-    if (recallAnswer.length() < needed) {
+    if (recallAnswer.length() < memoryNumber.length()) {
+      if      (code==IR_0) recallAnswer+='0';
+      else if (code==IR_1) recallAnswer+='1';
+      else if (code==IR_2) recallAnswer+='2';
+      else if (code==IR_3) recallAnswer+='3';
+      else if (code==IR_4) recallAnswer+='4';
+      else if (code==IR_5) recallAnswer+='5';
+      else if (code==IR_6) recallAnswer+='6';
+      else if (code==IR_7) recallAnswer+='7';
+      else if (code==IR_8) recallAnswer+='8';
+      else if (code==IR_9) recallAnswer+='9';
 
-      if (code == IR_0) recallAnswer += '0';
-      else if (code == IR_1) recallAnswer += '1';
-      else if (code == IR_2) recallAnswer += '2';
-      else if (code == IR_3) recallAnswer += '3';
-      else if (code == IR_4) recallAnswer += '4';
-      else if (code == IR_5) recallAnswer += '5';
-      else if (code == IR_6) recallAnswer += '6';
-      else if (code == IR_7) recallAnswer += '7';
-      else if (code == IR_8) recallAnswer += '8';
-      else if (code == IR_9) recallAnswer += '9';
-
-      lcd.setCursor(7, 0);
+      lcd.setCursor(7,0);
       lcd.print(recallAnswer);
     }
 
@@ -473,15 +457,15 @@ void handleMemRecallInput() {
   }
 }
 
-
-// SETUP --------------------------------------------------------------
+// ======================================================================
+// SETUP
+// ======================================================================
 
 void setup() {
   lcd.init();
   lcd.backlight();
 
   mySerial.begin(9600);
-
   IrReceiver.begin(irPin, ENABLE_LED_FEEDBACK);
 
   initButtons();
@@ -490,40 +474,36 @@ void setup() {
 
   alive = true;
   currentLevel = 1;
-  currentGame  = PG_NONE;
-  pState       = P_IDLE;
+  currentGame = PG_NONE;
+  pState = P_IDLE;
 
   lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Player ");
-  lcd.print(PLAYER_ID);
-  lcd.setCursor(0, 1);
+  lcd.setCursor(0,0);
+  lcd.print("Player 2");
+
+  lcd.setCursor(0,1);
   lcd.print("Waiting Simon...");
 }
 
-
-// LOOP ---------------------------------------------------------------
+// ======================================================================
+// LOOP
+// ======================================================================
 
 void loop() {
 
-  // parse incoming commands
   pollSerial();
 
-  // update countdown if in input mode
   if (pState == P_LED_INPUT ||
       pState == P_BUZ_INPUT ||
-      pState == P_US_INPUT  ||
+      pState == P_US_INPUT ||
       pState == P_MEM_RECALL_INPUT) {
     updateCountdownUI();
   }
 
-  // handle input
   switch (pState) {
-    case P_IDLE:
-      break;
+    case P_IDLE: break;
 
-    case P_MEM_SHOW:
-      break;
+    case P_MEM_SHOW: break;
 
     case P_LED_INPUT:
       handleLEDInput();
@@ -534,7 +514,6 @@ void loop() {
       break;
 
     case P_US_INPUT:
-      // nothing here; handled when requested
       break;
 
     case P_MEM_RECALL_INPUT:
