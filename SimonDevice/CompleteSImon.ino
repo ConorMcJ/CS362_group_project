@@ -2,18 +2,10 @@
 #include <LiquidCrystal_I2C.h>
 #include <SoftwareSerial.h>
 
-// ===========================================================
-// LCD + Multi-Serial Setup
-// ===========================================================
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Dedicated serial channels for each player
-// Simon TX → Player RX
-// Player TX → Simon RX
-//
-// Option 2 chosen: compact, contiguous assignments
-//
 // Player 1: RX=2, TX=3
 // Player 2: RX=4, TX=5
 // Player 3: RX=6, TX=7
@@ -25,9 +17,7 @@ SoftwareSerial ss3(6, 7);   // RX, TX for Player 3
 // Helper array to index correct channel
 SoftwareSerial* playerSS[4] = { nullptr, &ss1, &ss2, &ss3 };
 
-// ===========================================================
-// Joystick (menu)
-// ===========================================================
+// Joystick (for the menu)
 
 const int joyX  = A1;
 const int joyY  = A2;
@@ -39,9 +29,7 @@ const int HIGH_T = 700;
 unsigned long lastJoy       = 0;
 const unsigned long joyDelay = 200;
 
-// ===========================================================
 // LEDs + Buzzer
-// ===========================================================
 
 // Simon LEDs for LED mini-game (R,G,Y,B)
 const int ledPins[4] = {
@@ -53,9 +41,7 @@ const int ledPins[4] = {
 
 const int buzzerPin = 4;
 
-// ===========================================================
 // Game Globals
-// ===========================================================
 
 int  level       = 1;
 bool gameActive  = false;
@@ -69,7 +55,7 @@ unsigned long phaseStart = 0;
 
 bool alive[4] = { false, true, true, true };
 
-// Token / response system
+// Token response system
 int currentPlayerId    = 1;
 bool waitingForResponse = false;
 unsigned long tokenStart = 0;
@@ -77,9 +63,7 @@ const unsigned long tokenTimeout = 3000;
 
 String serialBuffer = "";
 
-// ===========================================================
 // LED Timing
-// ===========================================================
 
 bool ledPhaseInit       = false;
 bool ledShowingPattern  = false;
@@ -89,9 +73,7 @@ int ledIndex = 0;
 unsigned long lastLedStep = 0;
 const unsigned long ledStepInterval = 600;
 
-// ===========================================================
 // Buzzer Timing
-// ===========================================================
 
 bool buzPhaseInit       = false;
 bool buzShowingPattern  = false;
@@ -103,9 +85,7 @@ unsigned long lastBuzStep = 0;
 const unsigned long shortTone = 200;
 const unsigned long longTone  = 500;
 
-// ===========================================================
 // Ultrasonic + Recall Timing
-// ===========================================================
 
 bool usPhaseInit       = false;
 bool usResponsePhase   = false;
@@ -117,9 +97,7 @@ const int usFixedTime  = 8;
 bool recallPhaseInit     = false;
 bool recallResponsePhase = false;
 
-// ===========================================================
 // Start Melody (non-blocking)
-// ===========================================================
 
 const int melodyNotes[4]     = {523, 659, 784, 1047};
 const int melodyDurations[4] = {150, 150, 150, 250};
@@ -129,24 +107,18 @@ int melodyIndex = 0;
 bool melodyPlaying = false;
 unsigned long melodyNextEvent = 0;
 
-// ===========================================================
 // HUD Timing
-// ===========================================================
 
 int  responseTimeSec        = 0;
 unsigned long responseWindow = 0;
 unsigned long lastCountdownTick = 0;
 
-// ===========================================================
 // Mini-Game enumeration
-// ===========================================================
 
 enum MiniGame { MG_NONE, MG_LED, MG_BUZ, MG_US, MG_MEM };
 MiniGame currentMiniGame = MG_NONE;
 
-// ===========================================================
 // State Machine
-// ===========================================================
 
 enum SimonState {
   MENU,
@@ -162,9 +134,8 @@ enum SimonState {
 };
 SimonState simonState = MENU;
 
-// ===========================================================
 // Utilities
-// ===========================================================
+
 
 int computeResponseTime(int lvl) {
   float t = 6.0 + 1.5 * lvl;
@@ -187,9 +158,7 @@ void showHUD(const char *gameTag) {
   lcd.print("s");
 }
 
-// ===========================================================
 // Menu + Start Melody
-// ===========================================================
 
 bool menuOpen      = true;
 bool startShown    = false;
@@ -230,9 +199,7 @@ void showMenu() {
   menuOpen   = true;
 }
 
-// ===========================================================
 // Start / End
-// ===========================================================
 
 void startGame() {
   level      = 1;
@@ -274,9 +241,7 @@ void endGame() {
   simonState = GAME_OVER;
 }
 
-// ===========================================================
 // Pause
-// ===========================================================
 
 void togglePause() {
   if (simonState != PAUSED) {
@@ -292,9 +257,7 @@ void togglePause() {
   }
 }
 
-// ===========================================================
 // Handle Menu Buttons
-// ===========================================================
 
 void handleMenuButtons() {
   unsigned long now = millis();
@@ -337,9 +300,7 @@ void handleMenuButtons() {
   }
 }
 
-// ===========================================================
 // Start Screen
-// ===========================================================
 
 void showStartScreen() {
   unsigned long now = millis();
@@ -362,9 +323,7 @@ void showStartScreen() {
   }
 }
 
-// ===========================================================
 // Memory Digits
-// ===========================================================
 
 void generateMemoryNumber() {
   int digits = 3 + ((level - 1) / 3);
@@ -397,9 +356,7 @@ void runMemoryNumberPhase() {
   }
 }
 
-// ===========================================================
 // LED GAME
-// ===========================================================
 
 void turnOffAllLEDs() { for (int i=0;i<4;i++) digitalWrite(ledPins[i],LOW); }
 
@@ -485,9 +442,7 @@ void runLEDGame() {
   }
 }
 
-// ===========================================================
 // BUZZER GAME
-// ===========================================================
 
 void generateBuzzerPattern(int len) {
   buzPattern="";
@@ -568,9 +523,7 @@ void runBuzzerGame() {
   }
 }
 
-// ===========================================================
 // ULTRASONIC GAME
-// ===========================================================
 
 void runUSGame() {
   unsigned long now = millis();
@@ -620,9 +573,7 @@ void runUSGame() {
   }
 }
 
-// ===========================================================
 // RECALL GAME
-// ===========================================================
 
 void runRecallGame() {
   unsigned long now = millis();
@@ -669,9 +620,7 @@ void runRecallGame() {
   }
 }
 
-// ===========================================================
-// TOKEN SYSTEM (per-player serial)
-// ===========================================================
+// TOKEN SYSTEM
 
 String readOneLine(SoftwareSerial &ss) {
   while (ss.available()) {
@@ -763,9 +712,7 @@ void handleResult() {
   }
 }
 
-// ===========================================================
 // Advance or End
-// ===========================================================
 
 void advanceOrEnd() {
   bool anyone=false;
@@ -811,9 +758,7 @@ void advanceOrEnd() {
   }
 }
 
-// ===========================================================
 // Game Over
-// ===========================================================
 
 void displayGameOver() {
   unsigned long now=millis();
@@ -829,9 +774,7 @@ void displayGameOver() {
   }
 }
 
-// ===========================================================
 // Setup
-// ===========================================================
 
 void setup() {
   lcd.init();
@@ -854,9 +797,7 @@ void setup() {
   showMenu();
 }
 
-// ===========================================================
 // Loop
-// ===========================================================
 
 void loop() {
   handleMenuButtons();
