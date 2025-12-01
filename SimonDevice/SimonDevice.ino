@@ -99,7 +99,9 @@
 
 // Pin definitions
 #define TX 13
-#define RX 12
+#define RX_PLAYER1 12
+#define RX_PLAYER2 11
+#define RX_PLAYER3 9
 #define BUZZER 10
 #define PUSH_BUTTON 8
 #define JOYSTICK_X A2
@@ -163,7 +165,14 @@ byte buttonState = HIGH;
 byte lastButtonState = HIGH;
 unsigned long lastDebounceTime = 0;
 
-SoftwareSerial mySerial(RX, TX);
+// Separate SoftwareSerial for each player's RX line
+// TX is shared (broadcast), but each player has dedicated RX
+SoftwareSerial player1Serial(RX_PLAYER1, TX);
+SoftwareSerial player2Serial(RX_PLAYER2, TX);
+SoftwareSerial player3Serial(RX_PLAYER3, TX);
+
+// Pointer to active serial for receiving
+SoftwareSerial* activePlayerSerial = &player1Serial;
 
 // I2C LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -198,7 +207,9 @@ byte findAllWinners(byte* winnerArray);
 void setup() {
   // Define TX and RX pin modes for SoftwareSerial
   pinMode(TX, OUTPUT);
-  pinMode(RX, INPUT);
+  pinMode(RX_PLAYER1, INPUT);
+  pinMode(RX_PLAYER2, INPUT);
+  pinMode(RX_PLAYER3, INPUT);
 
   // Button and LED pins
   pinMode(PUSH_BUTTON, INPUT_PULLUP);
@@ -214,8 +225,13 @@ void setup() {
   digitalWrite(LED_3, LOW);
   digitalWrite(LED_4, LOW);
 
-  // Set the baud rate
-  mySerial.begin(9600);
+  // Initialize all 3 serial ports
+  player1Serial.begin(9600);
+  player2Serial.begin(9600);
+  player3Serial.begin(9600);
+  
+  // Start listening on player 1 by default
+  player1Serial.listen();
 
   // LCD init
   lcd.init();
@@ -913,33 +929,53 @@ void handlePausedState() {
   'E' - END_GAME
  */
 
-// Send command to all players
-void sendCommand(char cmd, byte data) {
-  mySerial.write('$');
-  mySerial.write(cmd);
-  if (data != 0) {
-    mySerial.write(data);
+// Helper to get the serial port for a specific player
+SoftwareSerial* getPlayerSerial(byte playerID) {
+  switch (playerID) {
+    case 1: return &player1Serial;
+    case 2: return &player2Serial;
+    case 3: return &player3Serial;
+    default: return &player1Serial;
   }
-  mySerial.write('#');
+}
+
+// Send command to all players (broadcast on TX - all players share RX from Simon)
+void sendCommand(char cmd, byte data) {
+  // Use player1Serial for TX (all share same TX pin)
+  player1Serial.write('$');
+  player1Serial.write(cmd);
+  if (data != 0) {
+    player1Serial.write(data);
+  }
+  player1Serial.write('#');
 }
 
 // Request data from specific player
 void requestPlayerData(byte playerID) {
-  mySerial.write('$');
-  mySerial.write('R');
-  mySerial.write('0' + playerID);
-  mySerial.write('#');
+  // Use player1Serial for TX (all share same TX pin)
+  player1Serial.write('$');
+  player1Serial.write('R');
+  player1Serial.write('0' + playerID);
+  player1Serial.write('#');
 }
 
 // Non-blocking serial read with support for chunking data
+// Switches to the appropriate player's dedicated RX line
 bool receivePlayerData(byte playerID, byte* buffer, byte maxLen, unsigned long timeout) {
   unsigned long startTime = millis();
   byte index = 0;
   bool started = false;
+  
+  // Get the correct serial port for this player and start listening
+  SoftwareSerial* playerSerial = getPlayerSerial(playerID);
+  playerSerial->listen();
+  
+  // Small delay to let listen() take effect
+  delayMicroseconds(100);
 
   while (millis() - startTime < timeout) {
-    if (mySerial.available() > 0) {
-      char c = mySerial.read();
+    if (playerSerial->available() > 0) {
+      char c = playerSerial->read();
 
       if (c == '@') {
         started = true;
