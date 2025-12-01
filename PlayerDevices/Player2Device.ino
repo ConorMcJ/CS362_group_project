@@ -5,21 +5,15 @@
 
 #define PLAYER_ID 2
 
-// ======================================================================
-// LCD & SERIAL
-// ======================================================================
-
 // I2C LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// Dedicated line to SIMON (must match Simon Option-2)
-const int rxPin = 4;    // from Simon TX=5
-const int txPin = 5;    // to Simon RX=4
+// Dedicated line to SIMON
+const int rxPin = 4;
+const int txPin = 5;
 SoftwareSerial mySerial(rxPin, txPin);
 
-// ======================================================================
 // INPUT HARDWARE
-// ======================================================================
 
 // 4 LED-game buttons (R,G,Y,B in that order)
 const int btnPins[4] = {6, 7, 8, 9};
@@ -29,16 +23,14 @@ const int joyYPin  = A0;
 const int JOY_LOW_T  = 300;
 const int JOY_HIGH_T = 700;
 
-// Ultrasonic sensor (unique per player)
+// Ultrasonic sensor
 const int trigPin = 10;
 const int echoPin = 11;
 
 // IR Receiver
 const int irPin = 12;
 
-// ======================================================================
 // STATE & GAME VARS
-// ======================================================================
 
 bool alive = true;
 int currentLevel = 1;
@@ -89,9 +81,7 @@ enum PlayerState {
 };
 PlayerState pState = P_IDLE;
 
-// ======================================================================
-// IR Remote Codes (UPDATE LATER WITH REAL READINGS)
-// ======================================================================
+// IR Remote Codes
 
 #define IR_POWER   0xFF45BA
 #define IR_0       0xFF16E9
@@ -105,9 +95,7 @@ PlayerState pState = P_IDLE;
 #define IR_8       0xFF52AD
 #define IR_9       0xFF4AB5
 
-// ======================================================================
 // LCD HELPERS
-// ======================================================================
 
 char gameCharFromMiniGame(PlayerMiniGame g) {
   switch (g) {
@@ -172,9 +160,7 @@ void updateCountdownUI() {
   }
 }
 
-// ======================================================================
 // SERIAL HANDLERS
-// ======================================================================
 
 void handleLine(const String& line);
 
@@ -366,9 +352,7 @@ void handleLine(const String& line) {
   else if (cmd == "S_RES")          handleS_RES(rest);
 }
 
-// ======================================================================
 // INPUT HANDLERS
-// ======================================================================
 
 void initButtons() {
   for (int i=0;i<4;i++) {
@@ -457,9 +441,7 @@ void handleMemRecallInput() {
   }
 }
 
-// ======================================================================
 // SETUP
-// ======================================================================
 
 void setup() {
   lcd.init();
@@ -485,9 +467,7 @@ void setup() {
   lcd.print("Waiting Simon...");
 }
 
-// ======================================================================
 // LOOP
-// ======================================================================
 
 void loop() {
 
