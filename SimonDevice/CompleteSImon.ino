@@ -39,7 +39,7 @@ const int ledPins[4] = {
   A3   // B
 };
 
-const int buzzerPin = 4;
+const int buzzerPin = A0;
 
 // Game Globals
 
