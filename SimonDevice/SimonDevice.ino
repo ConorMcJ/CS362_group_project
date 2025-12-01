@@ -1007,6 +1007,25 @@ void parsePlayerData(byte playerIndex, byte* buffer) {
   // Format: [PLAYER_ID][DATA_LENGTH][DATA...]
   byte dataLength = buffer[1] - '0';
 
+  // DEBUG: Show what we received
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("P");
+  lcd.print(playerIndex + 1);
+  lcd.print(" Len:");
+  lcd.print(dataLength);
+  lcd.print(" Raw:");
+  // Show first few raw bytes
+  for (byte i = 0; i < min(dataLength, (byte)5); i++) {
+    lcd.print((char)buffer[2 + i]);
+  }
+  lcd.setCursor(0, 1);
+  lcd.print("Exp:");
+  for (byte i = 0; i < min(patternLength, (byte)8); i++) {
+    lcd.print(currentPattern[i]);
+  }
+  delay(3000);  // Show debug for 3 seconds
+
   players[playerIndex].inputLength = dataLength;
   for (byte i = 0; i < dataLength && i < 50; i++) {
     players[playerIndex].inputData[i] = buffer[2 + i] - '0';
@@ -1060,6 +1079,26 @@ void evaluateResults() {
 }
 
 bool checkPattern(byte playerIndex) {
+  // DEBUG: Show comparison
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("P");
+  lcd.print(playerIndex + 1);
+  lcd.print(" Got:");
+  for (byte i = 0; i < min(players[playerIndex].inputLength, (byte)6); i++) {
+    lcd.print(players[playerIndex].inputData[i]);
+  }
+  lcd.setCursor(0, 1);
+  lcd.print("Need:");
+  for (byte i = 0; i < min(patternLength, (byte)6); i++) {
+    lcd.print(currentPattern[i]);
+  }
+  lcd.print(" L");
+  lcd.print(players[playerIndex].inputLength);
+  lcd.print("/");
+  lcd.print(patternLength);
+  delay(3000);
+
   if (players[playerIndex].inputLength != patternLength) {
     return false;
   }
