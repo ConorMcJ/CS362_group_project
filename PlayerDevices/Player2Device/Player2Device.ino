@@ -95,6 +95,12 @@ byte prevButton2State = HIGH;
 byte prevButton3State = HIGH;
 byte prevButton4State = HIGH;
 
+// Track stable (debounced) button states
+byte stableButton1State = HIGH;
+byte stableButton2State = HIGH;
+byte stableButton3State = HIGH;
+byte stableButton4State = HIGH;
+
 // ============= IR REMOTE =============
 IRrecv irrecv(IR_PIN);
 decode_results results;
@@ -129,6 +135,7 @@ void handleLEDInputState();
 void handleBuzzerInputState();
 void handleUSCaptureState();
 void handleRecallInputState();
+bool handlePushButton(byte reading, byte &prevReading, byte &stableState, unsigned long &lastDebounceTime);
 int measureDistance();
 byte decodeIRDigit(unsigned long code);
 void sendDataToSimon();
@@ -442,52 +449,40 @@ void handleLEDInputState() {
   byte btn4 = digitalRead(BUTTON_4);
   
   // Check button 1 - only trigger on falling edge (HIGH->LOW) with debounce
-  if (btn1 == LOW && prevButton1State == HIGH && 
-      (millis() - lastButton1Press > DEBOUNCE_DELAY)) {
+  if (handlePushButton(btn1, prevButton1State, stableButton1State, lastButton1Press)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 1;
       buttonPressed = true;
       pressedButton = 1;
     }
-    lastButton1Press = millis();
   }
-  prevButton1State = btn1;
   
   // Check button 2 - only trigger on falling edge (HIGH->LOW) with debounce
-  if (btn2 == LOW && prevButton2State == HIGH && 
-      (millis() - lastButton2Press > DEBOUNCE_DELAY)) {
+  if (handlePushButton(btn2, prevButton2State, stableButton2State, lastButton2Press)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 2;
       buttonPressed = true;
       pressedButton = 2;
     }
-    lastButton2Press = millis();
   }
-  prevButton2State = btn2;
   
   // Check button 3 - only trigger on falling edge (HIGH->LOW) with debounce
-  if (btn3 == LOW && prevButton3State == HIGH && 
-      (millis() - lastButton3Press > DEBOUNCE_DELAY)) {
+  if (handlePushButton(btn3, prevButton3State, stableButton3State, lastButton3Press)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 3;
       buttonPressed = true;
       pressedButton = 3;
     }
-    lastButton3Press = millis();
   }
-  prevButton3State = btn3;
   
   // Check button 4 - only trigger on falling edge (HIGH->LOW) with debounce
-  if (btn4 == LOW && prevButton4State == HIGH && 
-      (millis() - lastButton4Press > DEBOUNCE_DELAY)) {
+  if (handlePushButton(btn4, prevButton4State, stableButton4State, lastButton4Press)) {
     if (ledPatternIndex < MAX_PATTERN_LEN) {
       ledPattern[ledPatternIndex++] = 4;
       buttonPressed = true;
       pressedButton = 4;
     }
-    lastButton4Press = millis();
   }
-  prevButton4State = btn4;
   
   // Debug: Show button press on LCD
   if (buttonPressed) {
@@ -645,6 +640,31 @@ void handleRecallInputState() {
 }
 
 // ============= HELPER FUNCTIONS =============
+
+bool handlePushButton(byte reading, byte &prevReading, byte &stableState, unsigned long &lastDebounceTime) {
+  bool pressed = false;
+  
+  // If reading changed from last raw reading, reset debounce timer
+  if (reading != prevReading) {
+    lastDebounceTime = millis();
+  }
+  
+  // If reading has been stable for DEBOUNCE_DELAY, update stable state
+  if (millis() - lastDebounceTime > DEBOUNCE_DELAY) {
+    // If stable state is changing, check for falling edge
+    if (reading != stableState) {
+      if (reading == LOW) {
+        // Falling edge detected (button pressed)
+        pressed = true;
+      }
+      stableState = reading;
+    }
+  }
+  
+  // Always update previous reading for next iteration
+  prevReading = reading;
+  return pressed;
+}
 
 int measureDistance() {
   // Send trigger pulse
