@@ -510,16 +510,16 @@ void handleBuzzerInputState() {
   const char* direction = "";
   
   if (millis() - lastJoystickInput > JOYSTICK_DEBOUNCE) {
-    if (yVal < 300) {  // Joystick pushed down = LOW tone (0)
+    if (yVal < 300) {  // Joystick pushed up = HIGH tone (1)
       if (buzzerPatternIndex < MAX_PATTERN_LEN) {
-        buzzerPattern[buzzerPatternIndex++] = 0;
+        buzzerPattern[buzzerPatternIndex++] = 1;
         inputRecorded = true;
         direction = "DOWN(0)";
       }
       lastJoystickInput = millis();
-    } else if (yVal > 700) {  // Joystick pushed up = HIGH tone (1)
+    } else if (yVal > 700) {  // Joystick pushed down = LOW tone (0)
       if (buzzerPatternIndex < MAX_PATTERN_LEN) {
-        buzzerPattern[buzzerPatternIndex++] = 1;
+        buzzerPattern[buzzerPatternIndex++] = 0;
         inputRecorded = true;
         direction = "UP(1)";
       }

@@ -506,7 +506,8 @@ void handleSettingsMenuState() {
     if (xVal < 300 && selectedOption != 0) {
       selectedOption = 0;
       lastJoystickRead = millis();
-    } else if (xVal > 700 && selectedOption != 1) {
+    } else if (xVal > 
+     && selectedOption != 1) {
       selectedOption = 1;
       lastJoystickRead = millis();
     }
