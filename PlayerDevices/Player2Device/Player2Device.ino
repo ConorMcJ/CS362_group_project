@@ -14,7 +14,7 @@
  * - Joystick (Y-axis on A0)
  * - Ultrasonic sensor (TRIG=7, ECHO=8)
  * - IR Receiver (pin 6)
- * - Hardware Serial1
+ * - Hardware Serial1 (RX=0, TX=1)
  * 
  * Communication Protocol:
  * - Listen for commands: '$'[CMD][DATA]'#'

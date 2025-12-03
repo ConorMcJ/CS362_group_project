@@ -27,10 +27,11 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
-// --- CONFIGURATION ---
+// Config
 #include "config.h"  // Contains PLAYER_ID (1, 2, or 3)
 
-// --- PIN DEFINITIONS ---
+// Pin definitions
+// Using SoftwareSerial on pins 10 (RX) and 11 (TX) for R3
 #define RX 10
 #define TX 11
 
